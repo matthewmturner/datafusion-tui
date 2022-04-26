@@ -18,3 +18,7 @@
 mod s3;
 #[cfg(feature = "s3")]
 pub use s3::register_s3;
+#[cfg(feature = "azure")]
+mod azure;
+#[cfg(feature = "azure")]
+pub use azure::register_azure;

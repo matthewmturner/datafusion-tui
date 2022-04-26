@@ -81,6 +81,11 @@ impl Context {
         #[cfg(feature = "s3")]
         let ctx = register_s3(ctx).await;
 
+        #[cfg(feature = "azure")]
+        use crate::app::datafusion::object_stores::register_azure;
+        #[cfg(feature = "s3")]
+        let ctx = register_azure(ctx).await;
+
         #[cfg(feature = "bigtable")]
         use crate::app::datafusion::table_providers::register_bigtable;
         #[cfg(feature = "bigtable")]
