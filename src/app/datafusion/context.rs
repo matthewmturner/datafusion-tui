@@ -340,7 +340,7 @@ mod test {
             query: query.to_string(),
             succeeded: true,
             error: None,
-            rows: 1,
+            rows: 0,
             query_duration: 0f64,
         };
 

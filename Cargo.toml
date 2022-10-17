@@ -14,13 +14,12 @@ keywords = ["arrow", "query", "sql", "datafusion"]
 
 [dependencies]
 
-arrow = "13"
-aws-sdk-s3 = "0.9.0"
-aws-types = "0.9.0"
-ballista = { version = "0.7", optional = true }
+arrow = "24.0.0"
+parquet = "24.0.0"
+ballista = { version = "0.8", optional = true }
 clap = { version = "3", features = ["derive", "cargo"] }
 crossterm = { version = "0.23", features = ["serde"] }
-datafusion = "8"
+datafusion = "13.0.0"
 datafusion-catalogprovider-glue = { version = "0.1.4", optional = true }
 datafusion-objectstore-s3 = { version = "0.2.1", optional = true }
 dirs = "4.0"
@@ -28,13 +27,14 @@ futures = "0.3"
 http = "0.2.6"
 log = "0.4"
 mimalloc = { version = "0.1", default-features = false }
+object_store = "0.5"
 serde = "1.0.136"
 serde_json = "1.0.79"
-tui = { version = "0.17", default-features = false, features = [
+tui = { version = "0.19", default-features = false, features = [
     'crossterm',
     'serde',
 ] }
-tui-logger = "0.7"
+tui-logger = "0.8"
 tokio = { version = "1", features = ["full"] }
 unicode-width = "0.1.9"
 
