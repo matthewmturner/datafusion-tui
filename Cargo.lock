@@ -2403,7 +2403,7 @@ dependencies = [
 
 [[package]]
 name = "datafusion-dft"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "arrow-flight",
  "assert_cmd",
@@ -2624,7 +2624,7 @@ dependencies = [
 
 [[package]]
 name = "datafusion-functions-parquet"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrow",
  "async-trait",

@@ -14,7 +14,7 @@ base64 = { optional = true, version = "0.22.1" }
 color-eyre = "0.6.3"
 datafusion = "51"
 datafusion-functions-json = { optional = true, version = "0.51" }
-datafusion-functions-parquet = { optional = true, path = "../datafusion-functions-parquet", version = "0.1.0" }
+datafusion-functions-parquet = { optional = true, path = "../datafusion-functions-parquet", version = "0.2.0" }
 datafusion-udfs-wasm = { features = [
   "serde",
 ], optional = true, path = "../datafusion-udfs-wasm", version = "0.1.0" }
