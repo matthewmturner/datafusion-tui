@@ -1,6 +1,13 @@
 [package]
+authors = ["Matthew Turner <matthew.m.turner@outlook.com>"]
+description = "DataFusion App"
 edition = "2021"
+homepage = "https://github.com/datafusion-contrib/datafusion-dft/tree/main/crates/datafusion-app"
+keywords = ["datafusion", "query", "sql"]
+license = "Apache-2.0"
 name = "datafusion-app"
+readme = "README.md"
+repository = "https://github.com/datafusion-contrib/datafusion-dft/tree/main/crates/datafusion-app"
 version = "0.1.0"
 
 # Leaving Hudi and Iceberg around in case traction on those picks up.  It would be better if I just remove them from main and create PRs with the diff - maybe ill get around to that.
