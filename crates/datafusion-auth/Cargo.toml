@@ -1,6 +1,13 @@
 [package]
+authors = ["Matthew Turner <matthew.m.turner@outlook.com>"]
+description = "DataFusion Auth"
 edition = "2021"
+homepage = "https://github.com/datafusion-contrib/datafusion-dft/tree/main/crates/datafusion-auth"
+keywords = ["datafusion", "auth", "query", "sql"]
+license = "Apache-2.0"
 name = "datafusion-auth"
+readme = "README.md"
+repository = "https://github.com/datafusion-contrib/datafusion-dft/tree/main/crates/datafusion-auth"
 version = "0.1.0"
 
 [dependencies]
