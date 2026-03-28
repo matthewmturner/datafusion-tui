@@ -30,7 +30,8 @@
       "Bash(cargo fmt:*)",
       "Bash(./target/release/dft:*)",
       "Bash(/Users/matth/OpenSource/datafusion-tui/target/debug/dft:*)",
-      "Bash(./target/debug/dft:*)"
+      "Bash(./target/debug/dft:*)",
+      "Bash(rustup install:*)"
     ],
     "deny": [],
     "ask": []
