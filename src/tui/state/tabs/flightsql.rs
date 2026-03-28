@@ -25,8 +25,8 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::style::palette::tailwind;
 use ratatui::style::Style;
 use ratatui::widgets::TableState;
-use tokio::task::JoinHandle;
 use ratatui_textarea::TextArea;
+use tokio::task::JoinHandle;
 
 use crate::config::AppConfig;
 use crate::tui::pagination::{extract_page, has_sufficient_rows, PAGE_SIZE};
@@ -156,7 +156,8 @@ impl FlightSQLTabState<'_> {
 
     // TODO: Create Editor struct and move this there
     pub fn previous_word(&mut self) {
-        self.editor.move_cursor(ratatui_textarea::CursorMove::WordBack)
+        self.editor
+            .move_cursor(ratatui_textarea::CursorMove::WordBack)
     }
 
     pub fn delete_word(&mut self) {

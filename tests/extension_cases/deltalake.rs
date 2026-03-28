@@ -70,7 +70,7 @@ async fn test_deltalake_s3() {
         "s3",
         "test",
         "s3://test",
-        "http://localhost:4566",
+        "http://localhost:9000",
         "LSIAQAAAAAAVNCBMPNSG",
         "5555555555555555555555555555555555555555",
         true,

@@ -25,8 +25,8 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::style::palette::tailwind;
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::TableState;
-use tokio::task::JoinHandle;
 use ratatui_textarea::TextArea;
+use tokio::task::JoinHandle;
 
 use crate::config::AppConfig;
 use crate::tui::pagination::{extract_page, has_sufficient_rows, PAGE_SIZE};
@@ -220,7 +220,9 @@ impl SQLTabState<'_> {
     // TODO: Create Editor struct and move this there
     pub fn previous_word(&mut self) {
         match self.mode {
-            SQLTabMode::Normal => self.editor.move_cursor(ratatui_textarea::CursorMove::WordBack),
+            SQLTabMode::Normal => self
+                .editor
+                .move_cursor(ratatui_textarea::CursorMove::WordBack),
             SQLTabMode::DDL => self
                 .ddl_editor
                 .move_cursor(ratatui_textarea::CursorMove::WordBack),
