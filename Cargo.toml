@@ -40,6 +40,7 @@ parquet = "57"
 pin-project-lite = { version = "0.2.14" }
 prost = "0.14"
 ratatui = { optional = true, version = "0.30" }
+ratatui-textarea = { features = ["search"], optional = true, version = "0.8" }
 serde = { features = ["derive"], version = "1.0.197" }
 strum = { features = ["derive"], version = "0.26.2" }
 tokio = { features = [
@@ -65,7 +66,6 @@ tracing-subscriber = { features = ["env-filter"], version = "0.3.19" }
 tui-logger = { features = [
   "tracing-support",
 ], optional = true, version = "0.18" }
-ratatui-textarea = { features = ["search"], optional = true, version = "0.8" }
 url = { features = ["serde"], version = "2.5.2" }
 uuid = { optional = true, version = "1.10.0" }
 vortex = { optional = true, version = "0.58" }
@@ -115,7 +115,7 @@ http = [
 ]
 huggingface = ["datafusion-app/huggingface"]
 s3 = ["datafusion-app/s3"]
-tui = ["dep:crossterm", "dep:ratatui", "dep:tui-logger", "dep:ratatui-textarea"]
+tui = ["dep:crossterm", "dep:ratatui", "dep:ratatui-textarea", "dep:tui-logger"]
 udfs-wasm = ["datafusion-app/udfs-wasm"]
 vortex = [
   "datafusion-app/vortex",
