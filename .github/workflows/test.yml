@@ -225,7 +225,7 @@ jobs:
           echo "Test Execution complete!"
       - name: Run S3 tests
         run: |
-          cargo test --features=s3 extension_cases::s3
+          cargo test --features=s3 extension_cases::s3 -- --test-threads=1
   test-functions-json:
     name: Extension / Functions-JSON
     runs-on: ubuntu-latest
