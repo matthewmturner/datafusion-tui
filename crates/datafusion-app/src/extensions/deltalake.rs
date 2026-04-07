@@ -58,8 +58,8 @@ impl TableProviderFactory for DeltaTableFactory {
         _ctx: &dyn Session,
         cmd: &CreateExternalTable,
     ) -> datafusion::error::Result<Arc<dyn datafusion::catalog::TableProvider>> {
-        let table_url = ensure_table_uri(&cmd.location)
-            .map_err(|e| DataFusionError::External(Box::new(e)))?;
+        let table_url =
+            ensure_table_uri(&cmd.location).map_err(|e| DataFusionError::External(Box::new(e)))?;
 
         let provider = if cmd.options.is_empty() {
             deltalake::open_table(table_url)
