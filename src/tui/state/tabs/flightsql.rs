@@ -25,8 +25,8 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::style::palette::tailwind;
 use ratatui::style::Style;
 use ratatui::widgets::TableState;
+use ratatui_textarea::TextArea;
 use tokio::task::JoinHandle;
-use tui_textarea::TextArea;
 
 use crate::config::AppConfig;
 use crate::tui::pagination::{extract_page, has_sufficient_rows, PAGE_SIZE};
@@ -117,7 +117,7 @@ impl FlightSQLTabState<'_> {
         let content = lines.join("");
         if content == default {
             self.editor
-                .move_cursor(tui_textarea::CursorMove::Jump(0, 0));
+                .move_cursor(ratatui_textarea::CursorMove::Jump(0, 0));
             self.editor.delete_str(default.len());
         }
     }
@@ -151,12 +151,13 @@ impl FlightSQLTabState<'_> {
     // TODO: Create Editor struct and move this there
     pub fn next_word(&mut self) {
         self.editor
-            .move_cursor(tui_textarea::CursorMove::WordForward)
+            .move_cursor(ratatui_textarea::CursorMove::WordForward)
     }
 
     // TODO: Create Editor struct and move this there
     pub fn previous_word(&mut self) {
-        self.editor.move_cursor(tui_textarea::CursorMove::WordBack)
+        self.editor
+            .move_cursor(ratatui_textarea::CursorMove::WordBack)
     }
 
     pub fn delete_word(&mut self) {

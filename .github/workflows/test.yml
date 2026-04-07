@@ -85,6 +85,14 @@ jobs:
   test-cli:
     name: App / CLI
     runs-on: ubuntu-latest
+    services:
+      rustfs:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: LSIAQAAAAAAVNCBMPNSG
+          RUSTFS_SECRET_KEY: "5555555555555555555555555555555555555555"
     strategy:
       matrix:
         arch: [amd64]
@@ -107,17 +115,17 @@ jobs:
             target-${{ runner.os }}-
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-rust
-      - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
-        with:
-          image-tag: 'latest'
-          install-awslocal: 'true'
-          configuration: DEBUG=1
-      - name: Run Tests against LocalStack
+      - name: Wait for RustFS
+        run: timeout 60 bash -c 'until nc -z localhost 9000; do sleep 2; done'
+      - name: Setup S3 buckets
+        env:
+          AWS_ACCESS_KEY_ID: LSIAQAAAAAAVNCBMPNSG
+          AWS_SECRET_ACCESS_KEY: "5555555555555555555555555555555555555555"
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          awslocal s3 mb s3://test
-          awslocal s3 mv data/aggregate_test_100.csv s3://test/
-          awslocal s3 mb s3://tpch-db
+          aws --endpoint-url http://localhost:9000 s3 mb s3://test
+          aws --endpoint-url http://localhost:9000 s3 cp data/aggregate_test_100.csv s3://test/
+          aws --endpoint-url http://localhost:9000 s3 mb s3://tpch-db
           echo "Test Execution complete!"
       - name: Run CLI tests
         run: |
@@ -125,6 +133,14 @@ jobs:
   test-tui:
     name: App / TUI
     runs-on: ubuntu-latest
+    services:
+      rustfs:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: LSIAQAAAAAAVNCBMPNSG
+          RUSTFS_SECRET_KEY: "5555555555555555555555555555555555555555"
     strategy:
       matrix:
         arch: [amd64]
@@ -147,17 +163,17 @@ jobs:
             target-${{ runner.os }}-
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-rust
-      - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
-        with:
-          image-tag: 'latest'
-          install-awslocal: 'true'
-          configuration: DEBUG=1
-      - name: Run Tests against LocalStack
+      - name: Wait for RustFS
+        run: timeout 60 bash -c 'until nc -z localhost 9000; do sleep 2; done'
+      - name: Setup S3 buckets
+        env:
+          AWS_ACCESS_KEY_ID: LSIAQAAAAAAVNCBMPNSG
+          AWS_SECRET_ACCESS_KEY: "5555555555555555555555555555555555555555"
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          awslocal s3 mb s3://test
-          awslocal s3 mv data/aggregate_test_100.csv s3://test/
-          awslocal s3 mb s3://tpch-db
+          aws --endpoint-url http://localhost:9000 s3 mb s3://test
+          aws --endpoint-url http://localhost:9000 s3 cp data/aggregate_test_100.csv s3://test/
+          aws --endpoint-url http://localhost:9000 s3 mb s3://tpch-db
           echo "Test Execution complete!"
       - name: Run TUI tests
         run: |
@@ -166,6 +182,14 @@ jobs:
   test-s3:
     name: Extension / S3
     runs-on: ubuntu-latest
+    services:
+      rustfs:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: LSIAQAAAAAAVNCBMPNSG
+          RUSTFS_SECRET_KEY: "5555555555555555555555555555555555555555"
     strategy:
       matrix:
         arch: [amd64]
@@ -188,20 +212,20 @@ jobs:
             target-${{ runner.os }}-
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-rust
-      - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
-        with:
-          image-tag: 'latest'
-          install-awslocal: 'true'
-          configuration: DEBUG=1
-      - name: Run Tests against LocalStack
+      - name: Wait for RustFS
+        run: timeout 60 bash -c 'until nc -z localhost 9000; do sleep 2; done'
+      - name: Setup S3 buckets
+        env:
+          AWS_ACCESS_KEY_ID: LSIAQAAAAAAVNCBMPNSG
+          AWS_SECRET_ACCESS_KEY: "5555555555555555555555555555555555555555"
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          awslocal s3 mb s3://test
-          awslocal s3 mv data/aggregate_test_100.csv s3://test/
+          aws --endpoint-url http://localhost:9000 s3 mb s3://test
+          aws --endpoint-url http://localhost:9000 s3 cp data/aggregate_test_100.csv s3://test/
           echo "Test Execution complete!"
       - name: Run S3 tests
         run: |
-          cargo test --features=s3 extension_cases::s3
+          cargo test --features=s3 extension_cases::s3 -- --test-threads=1
   test-functions-json:
     name: Extension / Functions-JSON
     runs-on: ubuntu-latest
@@ -235,6 +259,14 @@ jobs:
   test-deltalake:
     name: Extension / Deltalake
     runs-on: ubuntu-latest
+    services:
+      rustfs:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: LSIAQAAAAAAVNCBMPNSG
+          RUSTFS_SECRET_KEY: "5555555555555555555555555555555555555555"
     strategy:
       matrix:
         arch: [amd64]
@@ -257,26 +289,20 @@ jobs:
             target-${{ runner.os }}-
       - name: Setup Rust Toolchain
         uses: ./.github/actions/setup-rust
-      - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
-        with:
-          image-tag: 'latest'
-          install-awslocal: 'true'
-          configuration: DEBUG=1
-      - name: Upload Delta Lake data to LocalStack
+      - name: Wait for RustFS
+        run: timeout 60 bash -c 'until nc -z localhost 9000; do sleep 2; done'
+      - name: Upload Delta Lake data to RustFS
+        env:
+          AWS_ACCESS_KEY_ID: LSIAQAAAAAAVNCBMPNSG
+          AWS_SECRET_ACCESS_KEY: "5555555555555555555555555555555555555555"
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          awslocal s3 mb s3://test
-          awslocal s3 sync data/deltalake/simple_table s3://test/deltalake/simple_table
-          echo "Delta Lake data uploaded to LocalStack"
+          aws --endpoint-url http://localhost:9000 s3 mb s3://test
+          aws --endpoint-url http://localhost:9000 s3 sync data/deltalake/simple_table s3://test/deltalake/simple_table
+          echo "Delta Lake data uploaded to RustFS"
       - name: Run Deltalake tests
         run: |
           cargo test --features="deltalake s3" extension_cases::deltalake
-        env:
-          AWS_ACCESS_KEY_ID: LSIAQAAAAAAVNCBMPNSG
-          AWS_SECRET_ACCESS_KEY: 5555555555555555555555555555555555555555
-          AWS_ENDPOINT_URL: http://localhost:4566
-          AWS_REGION: us-east-1
-          AWS_ALLOW_HTTP: true
   test-udfs-wasm:
     name: Extension / UDFs-WASM
     runs-on: ubuntu-latest

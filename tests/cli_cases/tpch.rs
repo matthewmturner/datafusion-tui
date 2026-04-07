@@ -57,7 +57,7 @@ async fn test_custom_config_with_s3() {
     let mut config_builder = TestConfigBuilder::default();
     config_builder.with_db_path("s3://tpch-db/db/");
     let bucket = "tpch-db";
-    let endpoint = "http://localhost:4566";
+    let endpoint = "http://localhost:9000";
     let access_key = "LSIAQAAAAAAVNCBMPNSG";
     let secret = "5555555555555555555555555555555555555555";
     let allow_http = true;

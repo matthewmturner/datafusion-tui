@@ -104,3 +104,5 @@ bench/url_files/*
 
 # Tags
 tags
+
+.claude/settings.local.json
