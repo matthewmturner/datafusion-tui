@@ -74,6 +74,20 @@ pub struct DftArgs {
     #[clap(long, short, help = "Only show how long the query took to run")]
     pub time: bool,
 
+    #[clap(
+        long,
+        short = 'j',
+        help = "Output query results as line-delimited JSON"
+    )]
+    pub json: bool,
+
+    #[clap(
+        long,
+        short = 'C',
+        help = "Concatenate all result batches into a single batch before printing"
+    )]
+    pub concat: bool,
+
     #[clap(long, short, help = "Benchmark the provided query")]
     pub bench: bool,
 
