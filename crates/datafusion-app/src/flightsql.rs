@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use arrow_flight::{
     decode::FlightRecordBatchStream,
+    flight_service_client::FlightServiceClient,
     sql::{
         client::FlightSqlServiceClient, CommandGetDbSchemas, CommandGetTables,
         CommandGetXdbcTypeInfo,
@@ -82,7 +83,14 @@ impl FlightSQLContext {
         let channel = Channel::from_static(url).connect().await;
         match channel {
             Ok(c) => {
-                let mut client = FlightSqlServiceClient::new(c);
+                let mut inner = FlightServiceClient::new(c);
+                if let Some(size) = self.config.max_decoding_message_size {
+                    inner = inner.max_decoding_message_size(size);
+                }
+                if let Some(size) = self.config.max_encoding_message_size {
+                    inner = inner.max_encoding_message_size(size);
+                }
+                let mut client = FlightSqlServiceClient::new_from_inner(inner);
                 // TODO: Look into setting both bearer and basic, which requires comma separating
                 // them in the same `Authorization` header key (https://www.rfc-editor.org/rfc/rfc7230#section-3.2.2)
                 //

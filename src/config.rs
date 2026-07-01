@@ -95,6 +95,14 @@ pub struct FlightSQLServerConfig {
     pub server_metrics_addr: SocketAddr,
     #[serde(default = "default_auth_config")]
     pub auth: AuthConfig,
+    /// Maximum size (in bytes) of a decoded gRPC message received by the server.
+    /// Defaults to tonic's default (4MB) when unset.
+    #[serde(default)]
+    pub max_decoding_message_size: Option<usize>,
+    /// Maximum size (in bytes) of an encoded gRPC message sent by the server.
+    /// Defaults to tonic's default (4MB) when unset.
+    #[serde(default)]
+    pub max_encoding_message_size: Option<usize>,
 }
 
 #[cfg(feature = "flightsql")]
@@ -105,6 +113,8 @@ impl Default for FlightSQLServerConfig {
             connection_url: default_connection_url(),
             server_metrics_addr: default_server_metrics_addr(),
             auth: default_auth_config(),
+            max_decoding_message_size: None,
+            max_encoding_message_size: None,
         }
     }
 }
@@ -122,6 +132,14 @@ pub struct FlightSQLClientConfig {
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub headers_file: Option<PathBuf>,
+    /// Maximum size (in bytes) of a decoded gRPC message received by the client.
+    /// Defaults to tonic's default (4MB) when unset.
+    #[serde(default)]
+    pub max_decoding_message_size: Option<usize>,
+    /// Maximum size (in bytes) of an encoded gRPC message sent by the client.
+    /// Defaults to tonic's default (4MB) when unset.
+    #[serde(default)]
+    pub max_encoding_message_size: Option<usize>,
 }
 
 #[cfg(feature = "flightsql")]
@@ -133,6 +151,8 @@ impl Default for FlightSQLClientConfig {
             auth: default_auth_config(),
             headers: default_headers(),
             headers_file: None,
+            max_decoding_message_size: None,
+            max_encoding_message_size: None,
         }
     }
 }
