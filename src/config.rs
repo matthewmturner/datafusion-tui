@@ -340,28 +340,85 @@ fn default_result_limit() -> usize {
     1000
 }
 
-pub fn create_config(config_path: PathBuf) -> AppConfig {
-    if config_path.exists() {
+pub fn create_config(config_path: PathBuf, overrides: &[(String, String)]) -> AppConfig {
+    let mut config_value = if config_path.exists() {
         debug!("Config exists");
-        let maybe_config_contents = std::fs::read_to_string(config_path);
-        if let Ok(config_contents) = maybe_config_contents {
-            let maybe_parsed_config: std::result::Result<AppConfig, toml::de::Error> =
-                toml::from_str(&config_contents);
-            match maybe_parsed_config {
-                Ok(parsed_config) => {
-                    debug!("Parsed config: {:?}", parsed_config);
-                    parsed_config
-                }
+        match std::fs::read_to_string(&config_path) {
+            Ok(config_contents) => match toml::from_str::<toml::Value>(&config_contents) {
+                Ok(value) => value,
                 Err(err) => {
                     error!("Error parsing config: {:?}", err);
-                    AppConfig::default()
+                    toml::Value::Table(Default::default())
                 }
-            }
-        } else {
-            AppConfig::default()
+            },
+            Err(_) => toml::Value::Table(Default::default()),
         }
     } else {
         debug!("No config, using default");
-        AppConfig::default()
+        toml::Value::Table(Default::default())
+    };
+
+    for (key, value) in overrides {
+        if let Err(err) = apply_config_override(&mut config_value, key, value) {
+            error!("Error applying config override '{key}={value}': {err}");
+        }
+    }
+
+    match config_value.try_into::<AppConfig>() {
+        Ok(parsed_config) => {
+            debug!("Parsed config: {:?}", parsed_config);
+            parsed_config
+        }
+        Err(err) => {
+            error!("Error parsing config after applying overrides: {:?}", err);
+            AppConfig::default()
+        }
+    }
+}
+
+/// Apply a single `section.key=value` override onto a parsed TOML document,
+/// creating intermediate tables as needed. Values are inferred as bool, int,
+/// float, or string (in that order).
+fn apply_config_override(
+    root: &mut toml::Value,
+    key_path: &str,
+    raw_value: &str,
+) -> Result<(), String> {
+    let parts: Vec<&str> = key_path.split('.').filter(|p| !p.is_empty()).collect();
+    let (last, ancestors) = parts
+        .split_last()
+        .ok_or_else(|| format!("empty config override key: '{key_path}'"))?;
+
+    let mut current = root;
+    for part in ancestors {
+        if current.as_table().is_none() {
+            *current = toml::Value::Table(Default::default());
+        }
+        current = current
+            .as_table_mut()
+            .expect("just ensured this is a table")
+            .entry(part.to_string())
+            .or_insert_with(|| toml::Value::Table(Default::default()));
+    }
+    if current.as_table().is_none() {
+        *current = toml::Value::Table(Default::default());
+    }
+    current
+        .as_table_mut()
+        .expect("just ensured this is a table")
+        .insert(last.to_string(), parse_override_value(raw_value));
+
+    Ok(())
+}
+
+fn parse_override_value(raw: &str) -> toml::Value {
+    if let Ok(b) = raw.parse::<bool>() {
+        toml::Value::Boolean(b)
+    } else if let Ok(i) = raw.parse::<i64>() {
+        toml::Value::Integer(i)
+    } else if let Ok(f) = raw.parse::<f64>() {
+        toml::Value::Float(f)
+    } else {
+        toml::Value::String(raw.to_string())
     }
 }
