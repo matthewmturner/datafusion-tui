@@ -155,6 +155,26 @@ connection_url = "http://localhost:50051"
 server_metrics_addr = "0.0.0.0:9000"
 ```
 
+### Max Message Size
+
+By default, `tonic` (the gRPC library used for FlightSQL) limits decoded and encoded messages
+to 4MB. Queries that return large record batches can exceed this and fail with a "Decoded
+message too large" error. `max_decoding_message_size` and `max_encoding_message_size` (in bytes)
+can be set on the client and/or server to raise (or lower) these limits. Leave them unset to
+keep the tonic default.
+
+```toml
+[flightsql_client]
+connection_url = "http://localhost:50051"
+max_decoding_message_size = 16777216 # 16MB
+max_encoding_message_size = 16777216 # 16MB
+
+[flightsql_server]
+connection_url = "http://localhost:50051"
+max_decoding_message_size = 16777216 # 16MB
+max_encoding_message_size = 16777216 # 16MB
+```
+
 ## Editor Config
 
 The editor config is where you can set your preferred editor settings.

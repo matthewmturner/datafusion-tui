@@ -275,6 +275,10 @@ pub struct FlightSQLConfig {
     pub benchmark_iterations: usize,
     pub auth: AuthConfig,
     pub headers: HashMap<String, String>,
+    /// Maximum size (in bytes) of a decoded gRPC message. `None` uses tonic's default (4MB).
+    pub max_decoding_message_size: Option<usize>,
+    /// Maximum size (in bytes) of an encoded gRPC message. `None` uses tonic's default (4MB).
+    pub max_encoding_message_size: Option<usize>,
 }
 
 #[cfg(feature = "flightsql")]
@@ -285,6 +289,8 @@ impl Default for FlightSQLConfig {
             benchmark_iterations: 10,
             auth: AuthConfig::default(),
             headers: HashMap::new(),
+            max_decoding_message_size: None,
+            max_encoding_message_size: None,
         }
     }
 }
@@ -296,12 +302,16 @@ impl FlightSQLConfig {
         benchmark_iterations: usize,
         auth: AuthConfig,
         headers: HashMap<String, String>,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
     ) -> Self {
         Self {
             connection_url,
             benchmark_iterations,
             auth,
             headers,
+            max_decoding_message_size,
+            max_encoding_message_size,
         }
     }
 }
