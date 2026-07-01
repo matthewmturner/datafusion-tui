@@ -62,6 +62,16 @@ pub struct DftArgs {
     pub config: Option<String>,
 
     #[clap(
+        long = "set",
+        short = 's',
+        global = true,
+        help = "Override a config value, e.g. --set flightsql_server.connection_url=http://localhost:50051. Can be repeated.",
+        value_parser(parse_config_override),
+        action = clap::ArgAction::Append
+    )]
+    pub set: Option<Vec<(String, String)>>,
+
+    #[clap(
         long,
         short = 'q',
         help = "Use the FlightSQL client defined in your config"
@@ -272,6 +282,20 @@ fn parse_command(command: &str) -> std::result::Result<String, String> {
     } else {
         Err("-c flag expects only non empty commands".to_string())
     }
+}
+
+fn parse_config_override(pair: &str) -> std::result::Result<(String, String), String> {
+    let (key, value) = pair.split_once('=').ok_or_else(|| {
+        format!(
+            "Invalid config override: '{pair}'\n       Expected format: 'section.key=value', e.g. 'flightsql_server.connection_url=http://localhost:50051'"
+        )
+    })?;
+    if key.trim().is_empty() {
+        return Err(format!(
+            "Invalid config override: '{pair}'\n       Key cannot be empty"
+        ));
+    }
+    Ok((key.trim().to_string(), value.trim().to_string()))
 }
 
 fn parse_header_line(line: &str) -> Result<(String, String), String> {
