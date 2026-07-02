@@ -42,6 +42,16 @@ You can specify a different config file with the `--config` parameter:
 dft --config /path/to/custom/config.toml
 ```
 
+### Overriding Config Values on the Command Line
+
+Individual config values can be overridden without editing the config file using the `--set` (or `-s`) parameter. It takes a `section.key=value` pair and can be repeated to override multiple values:
+
+```bash
+dft --set flightsql_client.connection_url=http://localhost:50051 --set flightsql_client.max_decoding_message_size=16777216
+```
+
+Overrides are applied on top of the config file (creating any missing sections), then the merged result is parsed. Values are inferred as booleans, integers, or floats where possible, falling back to strings.
+
 ## Execution Config
 
 The execution config is where you can define query execution properties for each app (so the below would each expect to be in a relevant app section like `shared`, `tui`, `cli`, or `flightsql_server` (The FlightSQL client doesnt actually execute so doesnt have an execution config).  You can configure the `ObjectStore`s that you want to use in your queries and path of a DDL file that you want to run on startup.
