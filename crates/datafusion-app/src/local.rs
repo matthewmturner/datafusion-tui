@@ -120,6 +120,12 @@ impl ExecutionContext {
             Arc::new(datafusion_functions_parquet::ParquetPageIndexFunc {}),
         );
 
+        #[cfg(feature = "websocket")]
+        session_ctx.register_udtf(
+            "websocket",
+            Arc::new(crate::tables::websocket::WebSocketFunc::default()),
+        );
+
         let catalog = create_app_catalog(config, app_name, app_version)?;
         session_ctx.register_catalog(&config.catalog.name, catalog);
 

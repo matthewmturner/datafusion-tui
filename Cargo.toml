@@ -85,9 +85,10 @@ reqwest = { features = ["json"], version = "0.12.23" }
 serde_json = "1.0.140"
 socket2 = "0.5"
 tempfile = "3.2.0"
+tokio-tungstenite = "0.29"
 url = "2.5.2"
 
-# When addding a new feature, also add it to the features tested list in CI (`.github/workflows/rust.yml`)
+# When addding a new feature, also add it to the features tested list in CI (`.github/workflows/test.yml`)
 [features]
 default = ["functions-parquet", "s3"]
 deltalake = ["datafusion-app/deltalake"]
@@ -124,6 +125,7 @@ vortex = [
   "dep:vortex-file",
   "dep:vortex-session",
 ]
+websocket = ["datafusion-app/websocket"]
 
 [[bin]]
 name = "dft"
