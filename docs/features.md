@@ -48,6 +48,16 @@ module_functions = {
 }
 ```
 
+### WebSocket (`--features=websocket`)
+
+Adds a `websocket` table function that connects to a WebSocket endpoint and streams received messages as rows with the schema (`received_at` Timestamp, `message` Utf8).  The first argument is the connection URL (`ws://` or `wss://`) and any remaining arguments are messages sent after the connection is established (for example, subscription messages).
+
+```sql
+SELECT * FROM websocket('wss://stream.example.com/ws', '{"op":"subscribe","channel":"trades"}') LIMIT 10
+```
+
+The source is unbounded: without a `LIMIT` (or an aggregation that can complete) the query streams until the server closes the connection.  Note the CLI `--concat` flag collects all batches and therefore should not be used with unbounded queries.
+
 ## External Features
 
 `dft` also has several external optional (conditionally compiled features) integrations which are controlled by [Rust Crate Features]

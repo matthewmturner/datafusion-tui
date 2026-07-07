@@ -35,6 +35,8 @@ mod s3;
 mod udfs_wasm;
 #[cfg(feature = "vortex")]
 mod vortex;
+#[cfg(feature = "websocket")]
+mod websocket;
 
 use datafusion::arrow::array::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;

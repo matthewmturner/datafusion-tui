@@ -58,6 +58,9 @@ cargo install datafusion-dft --features=deltalake
 
 # With JSON and Parquet functions
 cargo install datafusion-dft --features=functions-json,functions-parquet
+
+# With the websocket table function for streaming WebSocket messages
+cargo install datafusion-dft --features=websocket
 ```
 
 See the [Features documentation](docs/features.md) for all available features.
