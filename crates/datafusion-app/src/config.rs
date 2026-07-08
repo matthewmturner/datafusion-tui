@@ -67,6 +67,11 @@ pub fn merge_configs(shared: ExecutionConfig, priority: ExecutionConfig) -> Exec
         merged.wasm_udf = priority.wasm_udf
     }
 
+    #[cfg(feature = "clickhouse")]
+    if let Some(clickhouse) = priority.clickhouse {
+        merged.clickhouse = Some(clickhouse)
+    }
+
     merged
 }
 
@@ -74,6 +79,9 @@ pub fn merge_configs(shared: ExecutionConfig, priority: ExecutionConfig) -> Exec
 pub struct ExecutionConfig {
     #[serde(default)]
     pub object_store: Option<ObjectStoreConfig>,
+    #[cfg(feature = "clickhouse")]
+    #[serde(default)]
+    pub clickhouse: Option<Vec<ClickHouseConfig>>,
     #[serde(default = "default_ddl_path")]
     pub ddl_path: Option<PathBuf>,
     #[serde(default = "default_benchmark_iterations")]
@@ -100,6 +108,8 @@ impl Default for ExecutionConfig {
     fn default() -> Self {
         Self {
             object_store: None,
+            #[cfg(feature = "clickhouse")]
+            clickhouse: None,
             ddl_path: default_ddl_path(),
             benchmark_iterations: default_benchmark_iterations(),
             datafusion: None,
@@ -221,6 +231,61 @@ impl S3Config {
         }
 
         Ok(builder.build()?)
+    }
+}
+
+#[cfg(feature = "clickhouse")]
+fn default_clickhouse_catalog_name() -> String {
+    "clickhouse".to_string()
+}
+
+/// Connection details for a ClickHouse instance that is registered as a catalog. All of the
+/// tables from the instance (excluding system tables) are available under the registered catalog
+/// name.
+#[cfg(feature = "clickhouse")]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct ClickHouseConfig {
+    /// Name of the DataFusion catalog the ClickHouse databases and tables are registered under
+    #[serde(default = "default_clickhouse_catalog_name")]
+    pub name: String,
+    /// HTTP(S) url of the ClickHouse instance, for example "http://localhost:8123"
+    pub url: String,
+    pub user: Option<String>,
+    pub password: Option<String>,
+    /// Limit the catalog to a single ClickHouse database. When unset all non-system databases
+    /// are registered as schemas.
+    pub database: Option<String>,
+    /// Compression to use for transport ("lz4" or "none")
+    pub compression: Option<String>,
+    /// Additional ClickHouse client settings applied to queries. For example
+    /// `output_format_arrow_string_as_string = "1"` returns ClickHouse `String` columns as
+    /// Arrow `Utf8` instead of `Binary`.
+    #[serde(default)]
+    pub options: HashMap<String, String>,
+}
+
+#[cfg(feature = "clickhouse")]
+impl ClickHouseConfig {
+    /// Convert to the parameter map expected by
+    /// [`datafusion_table_providers::sql::db_connection_pool::clickhousepool::ClickHouseConnectionPool`]
+    pub fn to_params(&self) -> HashMap<String, String> {
+        let mut params = HashMap::from([("url".to_string(), self.url.clone())]);
+        if let Some(user) = &self.user {
+            params.insert("user".to_string(), user.clone());
+        }
+        if let Some(password) = &self.password {
+            params.insert("password".to_string(), password.clone());
+        }
+        if let Some(database) = &self.database {
+            params.insert("database".to_string(), database.clone());
+        }
+        if let Some(compression) = &self.compression {
+            params.insert("compression".to_string(), compression.clone());
+        }
+        for (key, value) in &self.options {
+            params.insert(format!("option_{key}"), value.clone());
+        }
+        params
     }
 }
 

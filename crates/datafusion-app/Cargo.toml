@@ -15,6 +15,9 @@ color-eyre = "0.6.3"
 datafusion = "52"
 datafusion-functions-json = { optional = true, version = "0.52" }
 datafusion-functions-parquet = { optional = true, path = "../datafusion-functions-parquet", version = "0.1.0" }
+datafusion-table-providers = { features = [
+  "clickhouse",
+], optional = true, version = "0.10.1" }
 datafusion-udfs-wasm = { features = [
   "serde",
 ], optional = true, path = "../datafusion-udfs-wasm", version = "0.1.0" }
@@ -55,6 +58,7 @@ vortex-datafusion = { optional = true, version = "0.66" }
 criterion = { features = ["async_tokio"], version = "0.5.1" }
 
 [features]
+clickhouse = ["dep:datafusion-table-providers"]
 default = ["functions-parquet"]
 deltalake = ["dep:deltalake"]
 flightsql = ["dep:arrow-flight", "dep:base64", "dep:tonic"]

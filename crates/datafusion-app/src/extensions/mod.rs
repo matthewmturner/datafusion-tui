@@ -23,6 +23,8 @@ use datafusion::prelude::SessionContext;
 use std::{fmt::Debug, sync::Arc};
 
 mod builder;
+#[cfg(feature = "clickhouse")]
+mod clickhouse;
 #[cfg(feature = "deltalake")]
 mod deltalake;
 #[cfg(feature = "huggingface")]
@@ -62,5 +64,7 @@ pub fn enabled_extensions() -> Vec<Arc<dyn Extension>> {
         Arc::new(huggingface::HuggingFaceExtension::new()),
         #[cfg(feature = "vortex")]
         Arc::new(vortex::VortexExtension::new()),
+        #[cfg(feature = "clickhouse")]
+        Arc::new(clickhouse::ClickHouseExtension::new()),
     ]
 }
