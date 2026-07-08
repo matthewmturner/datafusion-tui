@@ -17,7 +17,6 @@
 
 //! [`CatalogProvider`] and [`SchemaProvider`] implementations backed by a ClickHouse instance
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -69,10 +68,6 @@ impl ClickHouseCatalogProvider {
 }
 
 impl CatalogProvider for ClickHouseCatalogProvider {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn schema_names(&self) -> Vec<String> {
         self.schemas.keys().cloned().collect()
     }
@@ -95,10 +90,6 @@ pub struct ClickHouseSchemaProvider {
 
 #[async_trait::async_trait]
 impl SchemaProvider for ClickHouseSchemaProvider {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn table_names(&self) -> Vec<String> {
         self.tables.clone()
     }

@@ -92,9 +92,9 @@ pub async fn test_invalid_sql_command() {
     .await
     .unwrap();
 
-    // I think its implementation specific how they decide to return errors but I believe they will
-    // all be in the form of an IPC error
-    let expected = r##"Error: Ipc error"##;
+    // arrow-flight surfaces server-side failures as a Tonic status with the underlying
+    // SQL error in the message
+    let expected = r##"Expected: an SQL statement"##;
     assert.stderr(contains_str(expected));
     fixture.shutdown_and_wait().await;
 }
@@ -178,9 +178,9 @@ pub async fn test_invalid_sql_command_in_file() {
     .await
     .unwrap();
 
-    // I think its implementation specific how they decide to return errors but I believe they will
-    // all be in the form of an IPC error
-    let expected = r##"Error: Ipc error"##;
+    // arrow-flight surfaces server-side failures as a Tonic status with the underlying
+    // SQL error in the message
+    let expected = r##"Expected: an SQL statement"##;
     assert.stderr(contains_str(expected));
     fixture.shutdown_and_wait().await;
 }

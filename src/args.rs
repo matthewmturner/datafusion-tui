@@ -423,7 +423,7 @@ mod tests {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "# Simple format").unwrap();
         writeln!(file, "x-test: value1").unwrap();
-        writeln!(file, "").unwrap();
+        writeln!(file).unwrap();
         writeln!(file, "# Curl config format").unwrap();
         writeln!(file, "header = x-api-key: secret123").unwrap();
         writeln!(file, "-H \"database: production\"").unwrap();
@@ -467,7 +467,7 @@ mod tests {
     fn test_parse_headers_file_blank_lines() {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "x-api-key: secret123").unwrap();
-        writeln!(file, "").unwrap();
+        writeln!(file).unwrap();
         writeln!(file, "   ").unwrap();
         writeln!(file, "database: production").unwrap();
         file.flush().unwrap();

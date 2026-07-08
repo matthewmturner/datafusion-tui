@@ -42,10 +42,6 @@ struct ParquetPageIndexTable {
 
 #[async_trait]
 impl TableProvider for ParquetPageIndexTable {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn schema(&self) -> arrow::datatypes::SchemaRef {
         self.schema.clone()
     }
