@@ -22,6 +22,7 @@ use crate::extensions::{DftSessionStateBuilder, Extension};
 use datafusion::catalog::{Session, TableProviderFactory};
 use datafusion::common::DataFusionError;
 use datafusion::logical_expr::logical_plan::CreateExternalTable;
+use deltalake::delta_datafusion::TableProviderBuilder;
 use deltalake::table::builder::ensure_table_uri;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -84,7 +85,12 @@ impl TableProviderFactory for DeltaTableFactory {
                 .map_err(|e| DataFusionError::External(Box::new(e)))?
         };
 
-        Ok(Arc::new(provider))
+        let table_provider = TableProviderBuilder::default()
+            .with_log_store(provider.log_store())
+            .build()
+            .await?;
+
+        Ok(Arc::new(table_provider))
     }
 }
 
