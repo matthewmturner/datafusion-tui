@@ -856,7 +856,7 @@ impl VortexFileWriter {
         let concatenated = datafusion::arrow::compute::concat_batches(&schema, &self.batches)?;
 
         // Convert to Vortex array
-        let vortex_array = ArrayRef::from_arrow(concatenated, false);
+        let vortex_array = ArrayRef::from_arrow(concatenated, false).map_err(|e| eyre!("{}", e))?;
 
         // Convert to array stream
         let stream = vortex_array.to_array_stream();
