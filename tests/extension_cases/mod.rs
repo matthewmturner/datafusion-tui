@@ -21,6 +21,8 @@
 mod auth_basic;
 #[cfg(feature = "flightsql")]
 mod auth_bearer;
+#[cfg(feature = "clickhouse")]
+mod clickhouse;
 #[cfg(feature = "deltalake")]
 mod deltalake;
 #[cfg(feature = "flightsql")]

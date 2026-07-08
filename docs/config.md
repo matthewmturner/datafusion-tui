@@ -107,6 +107,23 @@ aws_allow_http = false
 
 **Security Note:** Credential chain is opt-in via the `use_credential_chain` flag. When false (default), only TOML credentials are used, preventing accidental exposure of unintended AWS accounts
 
+### ClickHouse Catalog Configuration
+
+With the `clickhouse` feature enabled, one or more ClickHouse instances can be registered as catalogs.  All non-system databases (or a single one, if `database` is set) are exposed as schemas with their tables queryable, for example `SELECT * FROM clickhouse.my_db.my_table`.
+
+```toml
+[[execution.clickhouse]]
+name = "clickhouse"                # catalog name to register (default "clickhouse")
+url = "http://localhost:8123"
+user = "admin"
+password = "secret"
+# database = "my_db"               # optionally limit the catalog to a single database
+# compression = "lz4"              # transport compression: "lz4" or "none"
+options = { output_format_arrow_string_as_string = "1" }
+```
+
+See the [Features Guide](features.md) for details.
+
 And define a custom DDL path like so (the default is `~/.config/dft/ddl.sql`).
 
 ```toml

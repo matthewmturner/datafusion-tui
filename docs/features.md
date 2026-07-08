@@ -118,6 +118,34 @@ Register deltalake tables.  For example:
 CREATE EXTERNAL TABLE table_name STORED AS DELTATABLE LOCATION 's3://bucket/table'
 ```
 
+### ClickHouse (`--features=clickhouse`)
+
+Register an entire ClickHouse instance as a catalog (backed by [datafusion-table-providers]).  Each non-system database in the instance becomes a schema in the catalog and all of its tables are queryable.  For example use the following config:
+
+```toml
+[[execution.clickhouse]]
+name = "clickhouse"                # catalog name to register (default "clickhouse")
+url = "http://localhost:8123"
+user = "admin"
+password = "secret"
+# database = "my_db"               # optionally limit the catalog to a single database
+# compression = "lz4"              # transport compression: "lz4" or "none"
+
+# Additional ClickHouse client settings applied to queries. The setting below returns
+# ClickHouse String columns as Arrow Utf8 instead of Binary.
+options = { output_format_arrow_string_as_string = "1" }
+```
+
+And then query with:
+
+```sql
+SELECT * FROM clickhouse.my_db.my_table
+```
+
+Multiple `[[execution.clickhouse]]` entries can be defined, each registered as its own catalog.  Databases and table names are discovered once at startup; the data itself is queried from ClickHouse on demand.
+
+[datafusion-table-providers]: https://github.com/datafusion-contrib/datafusion-table-providers
+
 ### Json Functions (`--features=function-json`)
 
 Adds functions from [datafusion-function-json] for querying JSON strings in DataFusion in `dft`.  For example:

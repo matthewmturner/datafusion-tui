@@ -286,6 +286,44 @@ jobs:
       - name: Run WebSocket tests
         run: |
           cargo test --features=websocket extension_cases::websocket
+  test-clickhouse:
+    name: Extension / ClickHouse
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:latest
+        ports:
+          - 8123:8123
+        env:
+          CLICKHOUSE_USER: admin
+          CLICKHOUSE_PASSWORD: secret
+    strategy:
+      matrix:
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache Cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cargo
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - name: Cache Rust target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: target-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            target-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-
+            target-${{ runner.os }}-
+      - name: Setup Rust Toolchain
+        uses: ./.github/actions/setup-rust
+      - name: Wait for ClickHouse
+        run: timeout 60 bash -c 'until curl -sf http://localhost:8123/ping; do sleep 2; done'
+      - name: Run ClickHouse tests
+        run: |
+          cargo test --features=clickhouse extension_cases::clickhouse
   test-deltalake:
     name: Extension / Deltalake
     runs-on: ubuntu-latest

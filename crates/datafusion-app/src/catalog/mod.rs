@@ -15,6 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#[cfg(feature = "clickhouse")]
+pub mod clickhouse;
+
 use std::sync::Arc;
 
 use datafusion::{
