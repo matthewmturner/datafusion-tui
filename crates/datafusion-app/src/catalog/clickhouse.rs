@@ -26,9 +26,27 @@ use datafusion::sql::TableReference;
 use datafusion_table_providers::clickhouse::ClickHouseTableFactory;
 use datafusion_table_providers::sql::db_connection_pool::clickhousepool::ClickHouseConnectionPool;
 use datafusion_table_providers::sql::db_connection_pool::dbconnection::AsyncDbConnection;
+use log::warn;
 
 fn to_external_err(e: impl std::error::Error + Send + Sync + 'static) -> DataFusionError {
     DataFusionError::External(Box::new(e))
+}
+
+/// Discover the tables of a ClickHouse database, excluding tables backed by stream-like engines
+/// (Kafka, RabbitMQ, etc.). ClickHouse rejects direct selects on those (see its
+/// `stream_like_engine_allow_direct_select` setting), so they cannot be queried through the
+/// catalog and would break table listing via `information_schema` (which infers the schema of
+/// every table by querying it).
+async fn non_stream_tables(pool: &ClickHouseConnectionPool, database: &str) -> Result<Vec<String>> {
+    pool.client()
+        .query(
+            "SELECT name FROM system.tables \
+             WHERE database = ? AND engine NOT IN ('Kafka', 'RabbitMQ', 'NATS', 'FileLog')",
+        )
+        .bind(database)
+        .fetch_all::<String>()
+        .await
+        .map_err(to_external_err)
 }
 
 /// A [`CatalogProvider`] that exposes the databases of a ClickHouse instance as schemas. The
@@ -54,7 +72,7 @@ impl ClickHouseCatalogProvider {
 
         let mut schemas = HashMap::with_capacity(schema_names.len());
         for schema_name in schema_names {
-            let tables = client.tables(&schema_name).await.map_err(to_external_err)?;
+            let tables = non_stream_tables(&pool, &schema_name).await?;
             let provider = ClickHouseSchemaProvider {
                 pool: Arc::clone(&pool),
                 schema_name: schema_name.clone(),
@@ -100,11 +118,21 @@ impl SchemaProvider for ClickHouseSchemaProvider {
         }
         let factory = ClickHouseTableFactory::new(Arc::clone(&self.pool));
         let table_reference = TableReference::partial(self.schema_name.as_str(), name);
-        let provider = factory
-            .table_provider(table_reference, None)
-            .await
-            .map_err(DataFusionError::External)?;
-        Ok(Some(provider))
+        // Schema inference can fail for tables that exist but are not queryable through the
+        // catalog (for example materialized views whose stored query reads from a stream-like
+        // engine table, or views that error when executed). Hide those tables instead of
+        // erroring so that they don't break listing the remaining tables via
+        // `information_schema`.
+        match factory.table_provider(table_reference, None).await {
+            Ok(provider) => Ok(Some(provider)),
+            Err(e) => {
+                warn!(
+                    "Failed to infer schema for ClickHouse table '{}.{}', hiding it from the catalog: {e}",
+                    self.schema_name, name
+                );
+                Ok(None)
+            }
+        }
     }
 
     fn table_exist(&self, name: &str) -> bool {

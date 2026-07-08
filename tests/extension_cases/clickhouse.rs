@@ -156,3 +156,41 @@ async fn test_clickhouse_table_discovery() {
 
     assert.stdout(contains_str(expected));
 }
+
+/// Stream-like engine tables (e.g. Kafka) reject direct selects, and materialized views whose
+/// stored query reads from them fail schema inference. Both must be excluded from the catalog so
+/// that they don't break listing the remaining tables via `information_schema`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clickhouse_stream_tables_excluded() {
+    seed_clickhouse("dft_test_streams");
+    clickhouse_exec(
+        "CREATE TABLE IF NOT EXISTS dft_test_streams.events_stream (id UInt32) ENGINE = Kafka \
+         SETTINGS kafka_broker_list = 'localhost:9092', kafka_topic_list = 'dft_test_events', \
+         kafka_group_name = 'dft_test_streams', kafka_format = 'JSONEachRow'",
+    );
+    clickhouse_exec(
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS dft_test_streams.events_consumer \
+         TO dft_test_streams.users \
+         AS SELECT id, 'kafka' AS name FROM dft_test_streams.events_stream",
+    );
+    let config = clickhouse_config();
+
+    let assert = Command::cargo_bin("dft")
+        .unwrap()
+        .arg("--config")
+        .arg(config.path)
+        .arg("-c")
+        .arg("SELECT table_name FROM clickhouse.information_schema.tables WHERE table_schema = 'dft_test_streams'")
+        .assert()
+        .success();
+
+    let expected = r#"
++------------+
+| table_name |
++------------+
+| users      |
++------------+
+"#;
+
+    assert.stdout(contains_str(expected));
+}
