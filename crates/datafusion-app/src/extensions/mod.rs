@@ -29,6 +29,8 @@ mod clickhouse;
 mod deltalake;
 #[cfg(feature = "huggingface")]
 mod huggingface;
+#[cfg(feature = "mongodb")]
+mod mongodb;
 #[cfg(feature = "s3")]
 mod s3;
 #[cfg(feature = "vortex")]
@@ -66,5 +68,7 @@ pub fn enabled_extensions() -> Vec<Arc<dyn Extension>> {
         Arc::new(vortex::VortexExtension::new()),
         #[cfg(feature = "clickhouse")]
         Arc::new(clickhouse::ClickHouseExtension::new()),
+        #[cfg(feature = "mongodb")]
+        Arc::new(mongodb::MongoDbExtension::new()),
     ]
 }

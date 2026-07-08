@@ -124,6 +124,24 @@ options = { output_format_arrow_string_as_string = "1" }
 
 See the [Features Guide](features.md) for details.
 
+### MongoDB Catalog Configuration
+
+With the `mongodb` feature enabled, one or more MongoDB instances can be registered as catalogs.  All non-system databases (or a single one, if `database` is set or a `connection_string` is used) are exposed as schemas with their collections queryable as tables, for example `SELECT * FROM mongodb.my_db.my_collection`.
+
+```toml
+[[execution.mongodb]]
+name = "mongodb"                   # catalog name to register (default "mongodb")
+host = "localhost"
+port = 27017
+user = "admin"
+password = "secret"
+# database = "my_db"               # optionally limit the catalog to a single database
+# connection_string = "mongodb://admin:secret@localhost:27017/my_db?authSource=admin"
+options = { auth_source = "admin", sslmode = "disabled" }
+```
+
+See the [Features Guide](features.md) for details.
+
 And define a custom DDL path like so (the default is `~/.config/dft/ddl.sql`).
 
 ```toml
