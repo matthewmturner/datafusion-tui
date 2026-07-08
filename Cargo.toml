@@ -116,6 +116,7 @@ http = [
   "dep:uuid",
 ]
 huggingface = ["datafusion-app/huggingface"]
+mongodb = ["datafusion-app/mongodb"]
 s3 = ["datafusion-app/s3"]
 tui = ["dep:crossterm", "dep:ratatui", "dep:ratatui-textarea", "dep:tui-logger"]
 udfs-wasm = ["datafusion-app/udfs-wasm"]

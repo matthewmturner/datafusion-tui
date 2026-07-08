@@ -31,6 +31,8 @@ mod flightsql;
 mod functions_json;
 #[cfg(feature = "huggingface")]
 mod huggingface;
+#[cfg(feature = "mongodb")]
+mod mongodb;
 #[cfg(feature = "s3")]
 mod s3;
 #[cfg(feature = "udfs-wasm")]

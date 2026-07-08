@@ -15,9 +15,7 @@ color-eyre = "0.6.3"
 datafusion = "54"
 datafusion-functions-json = { optional = true, version = "0.54" }
 datafusion-functions-parquet = { optional = true, path = "../datafusion-functions-parquet", version = "0.1.0" }
-datafusion-table-providers = { features = [
-  "clickhouse",
-], optional = true, version = "0.12.0" }
+datafusion-table-providers = { optional = true, version = "0.12.0" }
 datafusion-udfs-wasm = { features = [
   "serde",
 ], optional = true, path = "../datafusion-udfs-wasm", version = "0.1.0" }
@@ -64,13 +62,20 @@ vortex-datafusion = { optional = true, version = "0.76" }
 criterion = { features = ["async_tokio"], version = "0.5.1" }
 
 [features]
-clickhouse = ["dep:datafusion-table-providers"]
+clickhouse = [
+  "datafusion-table-providers/clickhouse",
+  "dep:datafusion-table-providers",
+]
 default = ["functions-parquet"]
 deltalake = ["dep:deltalake"]
 flightsql = ["dep:arrow-flight", "dep:base64", "dep:tonic"]
 functions-json = ["dep:datafusion-functions-json"]
 functions-parquet = ["dep:datafusion-functions-parquet"]
 huggingface = ["object_store_opendal", "opendal", "url"]
+mongodb = [
+  "datafusion-table-providers/mongodb",
+  "dep:datafusion-table-providers",
+]
 observability = ["dep:metrics", "dep:tokio-metrics"]
 s3 = ["object_store/aws", "url"]
 udfs-wasm = ["dep:datafusion-udfs-wasm"]

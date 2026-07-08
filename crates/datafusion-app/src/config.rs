@@ -72,6 +72,11 @@ pub fn merge_configs(shared: ExecutionConfig, priority: ExecutionConfig) -> Exec
         merged.clickhouse = Some(clickhouse)
     }
 
+    #[cfg(feature = "mongodb")]
+    if let Some(mongodb) = priority.mongodb {
+        merged.mongodb = Some(mongodb)
+    }
+
     merged
 }
 
@@ -82,6 +87,9 @@ pub struct ExecutionConfig {
     #[cfg(feature = "clickhouse")]
     #[serde(default)]
     pub clickhouse: Option<Vec<ClickHouseConfig>>,
+    #[cfg(feature = "mongodb")]
+    #[serde(default)]
+    pub mongodb: Option<Vec<MongoDbConfig>>,
     #[serde(default = "default_ddl_path")]
     pub ddl_path: Option<PathBuf>,
     #[serde(default = "default_benchmark_iterations")]
@@ -110,6 +118,8 @@ impl Default for ExecutionConfig {
             object_store: None,
             #[cfg(feature = "clickhouse")]
             clickhouse: None,
+            #[cfg(feature = "mongodb")]
+            mongodb: None,
             ddl_path: default_ddl_path(),
             benchmark_iterations: default_benchmark_iterations(),
             datafusion: None,
@@ -284,6 +294,69 @@ impl ClickHouseConfig {
         }
         for (key, value) in &self.options {
             params.insert(format!("option_{key}"), value.clone());
+        }
+        params
+    }
+}
+
+#[cfg(feature = "mongodb")]
+fn default_mongodb_catalog_name() -> String {
+    "mongodb".to_string()
+}
+
+/// Connection details for a MongoDB instance that is registered as a catalog. Databases are
+/// exposed as schemas and collections as tables, with Arrow schemas inferred by sampling
+/// documents.
+#[cfg(feature = "mongodb")]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct MongoDbConfig {
+    /// Name of the DataFusion catalog the MongoDB databases and collections are registered under
+    #[serde(default = "default_mongodb_catalog_name")]
+    pub name: String,
+    /// Full MongoDB connection string, for example
+    /// "mongodb://user:pass@localhost:27017/mydb?authSource=admin". When set it takes precedence
+    /// over the individual connection fields and the catalog is limited to the database in the
+    /// connection string.
+    pub connection_string: Option<String>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub user: Option<String>,
+    pub password: Option<String>,
+    /// Limit the catalog to a single MongoDB database. When unset (and no `connection_string` is
+    /// provided) all non-system databases are registered as schemas.
+    pub database: Option<String>,
+    /// Additional connection parameters passed through to the underlying pool, such as
+    /// `auth_source`, `srv`, `sslmode`, `unnest_depth` or `schema_infer_max_records`.
+    #[serde(default)]
+    pub options: HashMap<String, String>,
+}
+
+#[cfg(feature = "mongodb")]
+impl MongoDbConfig {
+    /// Convert to the parameter map expected by
+    /// [`datafusion_table_providers::mongodb::connection_pool::MongoDBConnectionPool`]
+    pub fn to_params(&self) -> HashMap<String, String> {
+        let mut params = HashMap::new();
+        if let Some(connection_string) = &self.connection_string {
+            params.insert("connection_string".to_string(), connection_string.clone());
+        }
+        if let Some(host) = &self.host {
+            params.insert("host".to_string(), host.clone());
+        }
+        if let Some(port) = &self.port {
+            params.insert("port".to_string(), port.to_string());
+        }
+        if let Some(user) = &self.user {
+            params.insert("user".to_string(), user.clone());
+        }
+        if let Some(password) = &self.password {
+            params.insert("pass".to_string(), password.clone());
+        }
+        if let Some(database) = &self.database {
+            params.insert("db".to_string(), database.clone());
+        }
+        for (key, value) in &self.options {
+            params.insert(key.clone(), value.clone());
         }
         params
     }

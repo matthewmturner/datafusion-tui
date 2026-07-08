@@ -103,6 +103,7 @@ cargo test --features=tui tui_cases
 cargo test --features=flightsql extension_cases::flightsql -- --test-threads=1
 cargo test --features=s3 extension_cases::s3
 cargo test --features=clickhouse extension_cases::clickhouse  # Requires local ClickHouse (see tests/extension_cases/clickhouse.rs)
+cargo test --features=mongodb extension_cases::mongodb  # Requires local MongoDB (see tests/extension_cases/mongodb.rs)
 cargo test --features=functions-json extension_cases::functions_json
 cargo test --features=deltalake extension_cases::deltalake
 cargo test --features="deltalake s3" extension_cases::deltalake::test_deltalake_s3  # Requires LocalStack
@@ -205,6 +206,7 @@ The project uses extensive feature flags to keep binary size manageable:
 - `functions-parquet` - Parquet-specific functions (default)
 - `functions-json` - JSON functions
 - `clickhouse` - Register ClickHouse instances as catalogs
+- `mongodb` - Register MongoDB instances as catalogs
 - `deltalake` - Delta Lake table format support
 - `vortex` - Vortex file format support
 - `flightsql` - FlightSQL server and client

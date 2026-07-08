@@ -144,6 +144,38 @@ SELECT * FROM clickhouse.my_db.my_table
 
 Multiple `[[execution.clickhouse]]` entries can be defined, each registered as its own catalog.  Databases and table names are discovered once at startup; the data itself is queried from ClickHouse on demand.
 
+### MongoDB (`--features=mongodb`)
+
+Register an entire MongoDB instance as a catalog (backed by [datafusion-table-providers]).  Each non-system database in the instance becomes a schema in the catalog and its collections are queryable as tables.  For example use the following config:
+
+```toml
+[[execution.mongodb]]
+name = "mongodb"                   # catalog name to register (default "mongodb")
+host = "localhost"
+port = 27017
+user = "admin"
+password = "secret"
+# database = "my_db"               # optionally limit the catalog to a single database
+
+# Alternatively provide a full connection string (takes precedence over the fields above and
+# limits the catalog to the database in the connection string)
+# connection_string = "mongodb://admin:secret@localhost:27017/my_db?authSource=admin"
+
+# Additional connection parameters passed to the underlying pool.  Note that TLS is
+# required by default; use sslmode = "disabled" for local instances without TLS.
+options = { auth_source = "admin", sslmode = "disabled" }
+```
+
+And then query with:
+
+```sql
+SELECT * FROM mongodb.my_db.my_collection
+```
+
+Multiple `[[execution.mongodb]]` entries can be defined, each registered as its own catalog.  Databases and collection names are discovered once at startup; the data itself is queried from MongoDB on demand.
+
+Because MongoDB is schemaless, the Arrow schema of a collection is inferred by sampling documents (400 by default, configurable with `options = { schema_infer_max_records = "1000" }`) the first time the collection is used in a query.  Nested documents can be flattened into top-level columns with `options = { unnest_depth = "2" }`.
+
 [datafusion-table-providers]: https://github.com/datafusion-contrib/datafusion-table-providers
 
 ### Json Functions (`--features=function-json`)

@@ -17,6 +17,8 @@
 
 #[cfg(feature = "clickhouse")]
 pub mod clickhouse;
+#[cfg(feature = "mongodb")]
+pub mod mongodb;
 
 use std::sync::Arc;
 
