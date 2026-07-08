@@ -16,7 +16,10 @@
 // under the License.
 
 use datafusion::{
-    datasource::{physical_plan::ParquetSource, source::DataSourceExec},
+    datasource::{
+        physical_plan::{FileScanConfig, ParquetSource},
+        source::DataSourceExec,
+    },
     physical_plan::{
         aggregates::AggregateExec,
         filter::FilterExec,
@@ -354,12 +357,16 @@ impl PlanIOVisitor {
             self.time_opening = metrics.sum_by_name("time_elapsed_opening");
             self.time_scanning = metrics.sum_by_name("time_elapsed_scanning_total");
 
-            if let Some(data_source_exec) = plan.as_any().downcast_ref::<DataSourceExec>() {
+            if let Some(data_source_exec) = plan.downcast_ref::<DataSourceExec>() {
                 if data_source_exec
                     .data_source()
-                    .as_any()
-                    .downcast_ref::<ParquetSource>()
-                    .is_some()
+                    .downcast_ref::<FileScanConfig>()
+                    .is_some_and(|config| {
+                        config
+                            .file_source()
+                            .downcast_ref::<ParquetSource>()
+                            .is_some()
+                    })
                 {
                     self.parquet_output_rows = metrics.output_rows();
                     self.parquet_rg_pruned_stats =
@@ -675,34 +682,28 @@ impl PlanComputeVisitor {
 }
 
 fn is_filter_plan(plan: &dyn ExecutionPlan) -> bool {
-    plan.as_any().downcast_ref::<FilterExec>().is_some()
+    plan.downcast_ref::<FilterExec>().is_some()
 }
 
 fn is_sort_plan(plan: &dyn ExecutionPlan) -> bool {
-    plan.as_any().downcast_ref::<SortExec>().is_some()
-        || plan
-            .as_any()
-            .downcast_ref::<SortPreservingMergeExec>()
-            .is_some()
+    plan.downcast_ref::<SortExec>().is_some()
+        || plan.downcast_ref::<SortPreservingMergeExec>().is_some()
 }
 
 fn is_projection_plan(plan: &dyn ExecutionPlan) -> bool {
-    plan.as_any().downcast_ref::<ProjectionExec>().is_some()
+    plan.downcast_ref::<ProjectionExec>().is_some()
 }
 
 fn is_join_plan(plan: &dyn ExecutionPlan) -> bool {
-    plan.as_any().downcast_ref::<HashJoinExec>().is_some()
-        || plan.as_any().downcast_ref::<CrossJoinExec>().is_some()
-        || plan.as_any().downcast_ref::<SortMergeJoinExec>().is_some()
-        || plan.as_any().downcast_ref::<NestedLoopJoinExec>().is_some()
-        || plan
-            .as_any()
-            .downcast_ref::<SymmetricHashJoinExec>()
-            .is_some()
+    plan.downcast_ref::<HashJoinExec>().is_some()
+        || plan.downcast_ref::<CrossJoinExec>().is_some()
+        || plan.downcast_ref::<SortMergeJoinExec>().is_some()
+        || plan.downcast_ref::<NestedLoopJoinExec>().is_some()
+        || plan.downcast_ref::<SymmetricHashJoinExec>().is_some()
 }
 
 fn is_aggregate_plan(plan: &dyn ExecutionPlan) -> bool {
-    plan.as_any().downcast_ref::<AggregateExec>().is_some()
+    plan.downcast_ref::<AggregateExec>().is_some()
 }
 
 impl From<PlanComputeVisitor> for ExecutionComputeStats {

@@ -102,7 +102,7 @@ async fn test_custom_config_with_s3() {
     let prefixes: Vec<_> = r
         .common_prefixes
         .iter()
-        .map(|p| p.parts().last().unwrap().as_ref().to_string())
+        .map(|p| p.parts().next_back().unwrap().as_ref().to_string())
         .collect();
     for dir in needed_dirs {
         assert!(prefixes.contains(&dir.to_string()));

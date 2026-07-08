@@ -25,7 +25,7 @@ use datafusion_app::{
     config::merge_configs, extensions::DftSessionStateBuilder, local::ExecutionContext,
 };
 use log::info;
-use object_store::ObjectStore;
+use object_store::{ObjectStore, ObjectStoreExt};
 use parquet::arrow::ArrowWriter;
 use tpchgen::generators::{
     CustomerGenerator, LineItemGenerator, NationGenerator, OrderGenerator, PartGenerator,

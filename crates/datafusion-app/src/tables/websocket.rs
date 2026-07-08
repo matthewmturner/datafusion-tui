@@ -28,7 +28,6 @@
 //! `LIMIT` the query streams until the server closes the connection.
 
 use std::{
-    any::Any,
     sync::{Arc, Once},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -138,10 +137,6 @@ impl WebSocketTable {
 
 #[async_trait]
 impl TableProvider for WebSocketTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn schema(&self) -> SchemaRef {
         Arc::clone(&self.schema)
     }
@@ -182,7 +177,7 @@ struct WebSocketExec {
     /// Schema representing the data after the optional projection is applied
     projected_schema: SchemaRef,
     limit: Option<usize>,
-    cache: PlanProperties,
+    cache: Arc<PlanProperties>,
 }
 
 impl WebSocketExec {
@@ -206,15 +201,15 @@ impl WebSocketExec {
         })
     }
 
-    fn compute_properties(projected_schema: SchemaRef) -> PlanProperties {
-        PlanProperties::new(
+    fn compute_properties(projected_schema: SchemaRef) -> Arc<PlanProperties> {
+        Arc::new(PlanProperties::new(
             EquivalenceProperties::new(projected_schema),
             Partitioning::UnknownPartitioning(1),
             EmissionType::Incremental,
             Boundedness::Unbounded {
                 requires_infinite_memory: false,
             },
-        )
+        ))
     }
 }
 
@@ -235,11 +230,7 @@ impl ExecutionPlan for WebSocketExec {
         "WebSocketExec"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn properties(&self) -> &PlanProperties {
+    fn properties(&self) -> &Arc<PlanProperties> {
         &self.cache
     }
 

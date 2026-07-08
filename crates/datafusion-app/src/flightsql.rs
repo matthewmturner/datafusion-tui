@@ -303,7 +303,10 @@ impl FlightSQLContext {
         _opts: ExecOptions,
     ) -> DFResult<ExecResult> {
         if let Some(ref mut client) = *self.client.lock().await {
-            let flight_info = client.execute(sql.to_string(), None).await?;
+            let flight_info = client
+                .execute(sql.to_string(), None)
+                .await
+                .map_err(|e| DataFusionError::External(Box::new(e)))?;
             if flight_info.endpoint.len() != 1 {
                 return Err(DataFusionError::External("More than one endpoint".into()));
             }
@@ -341,7 +344,7 @@ impl FlightSQLContext {
             client
                 .get_catalogs()
                 .await
-                .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))
+                .map_err(|e| DataFusionError::External(Box::new(e)))
         } else {
             Err(DataFusionError::External(
                 "No FlightSQL client configured.  Add one in `~/.config/dft/config.toml`".into(),
@@ -364,7 +367,7 @@ impl FlightSQLContext {
             client
                 .get_db_schemas(cmd)
                 .await
-                .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))
+                .map_err(|e| DataFusionError::External(Box::new(e)))
         } else {
             Err(DataFusionError::External(
                 "No FlightSQL client configured.  Add one in `~/.config/dft/config.toml`".into(),
@@ -393,7 +396,7 @@ impl FlightSQLContext {
             client
                 .get_tables(cmd)
                 .await
-                .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))
+                .map_err(|e| DataFusionError::External(Box::new(e)))
         } else {
             Err(DataFusionError::External(
                 "No FlightSQL client configured.  Add one in `~/.config/dft/config.toml`".into(),
@@ -408,7 +411,7 @@ impl FlightSQLContext {
             client
                 .get_table_types()
                 .await
-                .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))
+                .map_err(|e| DataFusionError::External(Box::new(e)))
         } else {
             Err(DataFusionError::External(
                 "No FlightSQL client configured.  Add one in `~/.config/dft/config.toml`".into(),
@@ -430,7 +433,7 @@ impl FlightSQLContext {
             client
                 .get_sql_info(sql_info_list)
                 .await
-                .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))
+                .map_err(|e| DataFusionError::External(Box::new(e)))
         } else {
             Err(DataFusionError::External(
                 "No FlightSQL client configured.  Add one in `~/.config/dft/config.toml`".into(),
@@ -449,7 +452,7 @@ impl FlightSQLContext {
             client
                 .get_xdbc_type_info(cmd)
                 .await
-                .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))
+                .map_err(|e| DataFusionError::External(Box::new(e)))
         } else {
             Err(DataFusionError::External(
                 "No FlightSQL client configured.  Add one in `~/.config/dft/config.toml`".into(),
@@ -467,7 +470,7 @@ impl FlightSQLContext {
                     let stream = client
                         .do_get(ticket.into_request())
                         .await
-                        .map_err(|e| DataFusionError::ArrowError(Box::new(e), None))?;
+                        .map_err(|e| DataFusionError::External(Box::new(e)))?;
                     streams.push(stream);
                 } else {
                     debug!("No ticket for endpoint: {endpoint}");
