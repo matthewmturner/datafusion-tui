@@ -531,18 +531,17 @@ mod test {
             .unwrap();
 
         let expected = [
-             "+---------------+--------------------------------------------------------------------------+",
-    "| plan_type     | plan                                                                     |",
-    "+---------------+--------------------------------------------------------------------------+",
-    "| logical_plan  | Filter: test.id = Int32(2)                                               |",
-    "|               |   TableScan: test projection=[id, val]                                   |",
-    "| physical_plan | CoalesceBatchesExec: target_batch_size=8192                              |",
-    "|               |   FilterExec: id@0 = 2                                                   |",
-    "|               |     RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1 |",
-    "|               |       CooperativeExec                                                    |",
-    "|               |         MapExec: partitions=1, projection=Some([0, 1])                   |",
-    "|               |                                                                          |",
-    "+---------------+--------------------------------------------------------------------------+",
+            "+---------------+------------------------------------------------------------------------+",
+            "| plan_type     | plan                                                                   |",
+            "+---------------+------------------------------------------------------------------------+",
+            "| logical_plan  | Filter: test.id = Int32(2)                                             |",
+            "|               |   TableScan: test projection=[id, val]                                 |",
+            "| physical_plan | FilterExec: id@0 = 2                                                   |",
+            "|               |   RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1 |",
+            "|               |     CooperativeExec                                                    |",
+            "|               |       MapExec: partitions=1, projection=Some([0, 1])                   |",
+            "|               |                                                                        |",
+            "+---------------+------------------------------------------------------------------------+",
         ];
 
         assert_batches_eq!(expected, &batches);
