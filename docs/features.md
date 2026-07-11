@@ -80,6 +80,13 @@ SELECT src_ip, count(*) FROM capture('en0', 'tcp port 443', 10) GROUP BY src_ip;
 
 Without a duration the live capture is unbounded: use a `LIMIT` or the query streams until cancelled.  Live capture requires elevated privileges (sudo, `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS) and links against libpcap (`libpcap-dev` on Debian/Ubuntu; included with macOS).
 
+`pcap_wide` and `capture_wide` take the same arguments as their narrow counterparts and append DNS and geolocation enrichment columns for the source and destination addresses: `src_host` / `dst_host` (reverse DNS) and `src_country`, `src_city`, `src_lat`, `src_lon` plus the `dst_` equivalents (resolved against the configured `geoip` database; without one the geolocation columns are `NULL`):
+
+```sql
+SELECT dst_ip, dst_host, dst_country, count(*) AS packets
+FROM pcap_wide('capture.pcap') GROUP BY dst_ip, dst_host, dst_country ORDER BY packets DESC
+```
+
 `interfaces` lists the system's network capture interfaces (similar to `tshark -D`) with their addresses and status flags, which is useful for discovering what to pass to `capture`.  Listing does not require elevated privileges:
 
 ```sql
@@ -95,19 +102,23 @@ FROM capture('en0', 'tcp', 10) GROUP BY dst_ip, host ORDER BY packets DESC
 
 Lookups are cached and bounded by a timeout; addresses that fail to parse, fail to resolve, or time out yield `NULL`.
 
-There is also a `geoip` scalar function that geolocates an IP address using a MaxMind-format (`.mmdb`) database such as the free [GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) database, returning a struct with `country_code`, `country`, `city`, `latitude`, `longitude`, and `time_zone` fields:
+There is also a `geoip` scalar function that geolocates an IP address using a MaxMind-format (`.mmdb`) database, returning a struct with `country_code`, `country`, `city`, `latitude`, `longitude`, `time_zone`, and `error` fields:
 
 ```sql
 SELECT geoip(src_ip, '/path/GeoLite2-City.mmdb')['country_code'] AS country, count(*) AS packets
 FROM pcap('capture.pcap') GROUP BY country ORDER BY packets DESC
 ```
 
-The database path can also come from the `GEOIP_DB` environment variable or the `geoip_db_path` entry in the `[execution.net]` config section (the environment variable takes precedence), in which case the second argument can be omitted.  Addresses that fail to parse or have no entry in the database yield `NULL`; a database that cannot be opened is a query error.
+A single database file serves every field — there is no per-field database.  A City-schema database ([GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data), free with a MaxMind account, or the commercial GeoIP2-City) populates all fields; a Country-schema database (GeoLite2-Country) populates only `country_code` and `country`, leaving the rest `NULL`; other schemas (ASN, ISP, ...) yield all-`NULL` fields.
+
+The database path can also come from the `GEOIP_DB` environment variable or the `geoip_db_path` entry in the `[execution.net]` config section (the environment variable takes precedence), in which case the second argument can be omitted.
 
 ```toml
 [execution.net]
 geoip_db_path = "/path/to/GeoLite2-City.mmdb"
 ```
+
+Addresses that fail to parse or have no entry in the database yield `NULL`.  A database that is missing, unreadable, or unconfigured does not fail the query: the location fields are `NULL` and the `error` field (`NULL` on success) carries the reason, e.g. `SELECT geoip(src_ip)['error']`.  The same applies to the geolocation columns of `pcap_wide` / `capture_wide`, which are `NULL` when the database is unavailable.
 
 ## External Features
 

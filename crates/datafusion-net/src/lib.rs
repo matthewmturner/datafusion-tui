@@ -23,6 +23,8 @@
 //!   live-captured packets from a network interface
 //! - [`InterfacesFunc`] (`interfaces`, requires the `live` feature): lists
 //!   the system's network capture interfaces
+//! - [`PcapWideFunc`] / [`CaptureWideFunc`] (`pcap_wide` / `capture_wide`):
+//!   the same tables with DNS and geolocation enrichment columns appended
 //!
 //! Scalar UDFs for enriching the IP columns:
 //!
@@ -64,6 +66,7 @@ mod interfaces;
 mod live;
 mod schema;
 mod udfs;
+mod wide;
 pub mod writer;
 
 pub use file::{PcapFunc, PcapTable};
@@ -74,6 +77,9 @@ pub use interfaces::{interfaces_schema, InterfacesFunc};
 pub use live::{CaptureFunc, CaptureTable};
 pub use schema::packet_schema;
 pub use udfs::ReverseDnsUdf;
+#[cfg(feature = "live")]
+pub use wide::CaptureWideFunc;
+pub use wide::PcapWideFunc;
 
 /// Extracts a string argument from a table function expression
 pub(crate) fn expr_to_string(expr: &Expr, func: &str, what: &str) -> Result<String> {

@@ -28,13 +28,23 @@
 //! FROM pcap('capture.pcap')
 //! ```
 //!
+//! A single MaxMind-format database file serves every field — there is no
+//! per-field database. A City-schema database ([GeoLite2-City] free with a
+//! MaxMind account, or the commercial GeoIP2-City) populates all fields; a
+//! Country-schema database (GeoLite2-Country) populates only `country_code`
+//! and `country`, leaving the rest NULL; other schemas (ASN, ISP, ...) have
+//! none of these fields and yield all-NULL values.
+//!
 //! The database path is taken from the optional second argument
 //! (`geoip(ip, '/path/GeoLite2-City.mmdb')`), or, for the single-argument
 //! form, from the `GEOIP_DB` environment variable ([`GEOIP_DB_ENV_VAR`]) read
 //! when the UDF is constructed. Opened databases are cached process-wide.
 //!
 //! Addresses that fail to parse or have no entry in the database yield a
-//! NULL struct; a database that cannot be opened is a query error.
+//! NULL struct. A database that is missing, unreadable, or unconfigured does
+//! not fail the query: the location fields are NULL and the struct's `error`
+//! field carries the reason (it is NULL on success), so
+//! `geoip(ip)['error']` surfaces what went wrong.
 //!
 //! [GeoLite2-City]: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
 
@@ -53,7 +63,7 @@ use datafusion::{
         },
         datatypes::{DataType, Field, Fields},
     },
-    common::{cast::as_string_array, exec_datafusion_err, exec_err, Result},
+    common::{cast::as_string_array, exec_err, Result},
     logical_expr::{
         ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
     },
@@ -67,15 +77,21 @@ pub const GEOIP_DB_ENV_VAR: &str = "GEOIP_DB";
 /// A cached, shared handle to an opened database
 type SharedReader = Arc<maxminddb::Reader<Vec<u8>>>;
 
-/// Process-wide cache of opened databases, keyed by path. Readers hold the
-/// whole database in memory, so each distinct path is loaded once and shared
-/// across batches and queries.
-fn readers() -> &'static Mutex<HashMap<PathBuf, SharedReader>> {
-    static READERS: OnceLock<Mutex<HashMap<PathBuf, SharedReader>>> = OnceLock::new();
+/// A cached open outcome: the reader, or the message describing why the
+/// database could not be opened
+type ReaderResult = std::result::Result<SharedReader, Arc<str>>;
+
+/// Process-wide cache of database open outcomes, keyed by path. Readers hold
+/// the whole database in memory, so each distinct path is loaded once and
+/// shared across batches and queries. Failures are cached too, so a bad path
+/// costs one open attempt instead of one per row.
+fn readers() -> &'static Mutex<HashMap<PathBuf, ReaderResult>> {
+    static READERS: OnceLock<Mutex<HashMap<PathBuf, ReaderResult>>> = OnceLock::new();
     READERS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Fields of the struct returned by `geoip`
+/// Fields of the struct returned by `geoip`. `error` is NULL on success and
+/// carries the reason when the database could not be used.
 fn geoip_fields() -> Fields {
     Fields::from(vec![
         Field::new("country_code", DataType::Utf8, true),
@@ -84,10 +100,13 @@ fn geoip_fields() -> Fields {
         Field::new("latitude", DataType::Float64, true),
         Field::new("longitude", DataType::Float64, true),
         Field::new("time_zone", DataType::Utf8, true),
+        Field::new("error", DataType::Utf8, true),
     ])
 }
 
-/// Owned location values extracted from a database record
+/// Owned location values extracted from a database record, or the reason no
+/// lookup could be performed
+#[derive(Default)]
 struct GeoRecord {
     country_code: Option<String>,
     country: Option<String>,
@@ -95,6 +114,7 @@ struct GeoRecord {
     latitude: Option<f64>,
     longitude: Option<f64>,
     time_zone: Option<String>,
+    error: Option<String>,
 }
 
 impl GeoRecord {
@@ -106,6 +126,16 @@ impl GeoRecord {
             latitude: city.location.latitude,
             longitude: city.location.longitude,
             time_zone: city.location.time_zone.map(str::to_string),
+            error: None,
+        }
+    }
+
+    /// A record whose location fields are NULL and whose `error` field
+    /// carries the reason
+    fn from_error(error: impl Into<String>) -> Self {
+        Self {
+            error: Some(error.into()),
+            ..Self::default()
         }
     }
 }
@@ -138,19 +168,23 @@ impl GeoIpUdf {
         )
     }
 
-    /// Returns the cached reader for `path`, opening (and caching) the
-    /// database on first use
-    fn reader_for(path: &Path) -> Result<SharedReader> {
+    /// Returns the cached open outcome for `path`, attempting (and caching)
+    /// the open on first use
+    fn reader_for(path: &Path) -> ReaderResult {
         let mut readers = readers().lock().expect("geoip reader cache poisoned");
-        if let Some(reader) = readers.get(path) {
-            return Ok(Arc::clone(reader));
+        if let Some(outcome) = readers.get(path) {
+            return outcome.clone();
         }
-        let reader = maxminddb::Reader::open_readfile(path).map_err(|e| {
-            exec_datafusion_err!("geoip failed to open database '{}': {e}", path.display())
-        })?;
-        let reader = Arc::new(reader);
-        readers.insert(path.to_path_buf(), Arc::clone(&reader));
-        Ok(reader)
+        let outcome = maxminddb::Reader::open_readfile(path)
+            .map(Arc::new)
+            .map_err(|e| {
+                Arc::from(format!(
+                    "geoip failed to open database '{}': {e}",
+                    path.display()
+                ))
+            });
+        readers.insert(path.to_path_buf(), outcome.clone());
+        outcome
     }
 }
 
@@ -194,10 +228,11 @@ impl ScalarUDFImpl for GeoIpUdf {
         let mut latitude = Float64Builder::new();
         let mut longitude = Float64Builder::new();
         let mut time_zone = StringBuilder::new();
+        let mut error = StringBuilder::new();
         let mut validity = NullBufferBuilder::new(ips.len());
 
         for row in 0..ips.len() {
-            match self.lookup_row(ips, paths, row)? {
+            match self.lookup_row(ips, paths, row) {
                 Some(record) => {
                     country_code.append_option(record.country_code);
                     country.append_option(record.country);
@@ -205,6 +240,7 @@ impl ScalarUDFImpl for GeoIpUdf {
                     latitude.append_option(record.latitude);
                     longitude.append_option(record.longitude);
                     time_zone.append_option(record.time_zone);
+                    error.append_option(record.error);
                     validity.append_non_null();
                 }
                 None => {
@@ -214,6 +250,7 @@ impl ScalarUDFImpl for GeoIpUdf {
                     latitude.append_null();
                     longitude.append_null();
                     time_zone.append_null();
+                    error.append_null();
                     validity.append_null();
                 }
             }
@@ -226,6 +263,7 @@ impl ScalarUDFImpl for GeoIpUdf {
             Arc::new(latitude.finish()),
             Arc::new(longitude.finish()),
             Arc::new(time_zone.finish()),
+            Arc::new(error.finish()),
         ];
         let structs = StructArray::new(geoip_fields(), arrays, validity.finish());
         Ok(ColumnarValue::Array(Arc::new(structs)))
@@ -233,45 +271,49 @@ impl ScalarUDFImpl for GeoIpUdf {
 }
 
 impl GeoIpUdf {
-    /// Geolocates a single row. `Ok(None)` (a NULL struct) covers the
-    /// row-level misses: NULL or unparseable address, NULL path argument, or
-    /// an address with no database entry. Configuration problems — no
-    /// database available or a database that cannot be opened — are errors.
+    /// Geolocates a single row. `None` (a NULL struct) covers the row-level
+    /// misses: NULL or unparseable address, NULL path argument, or an
+    /// address with no database entry. Database problems — none configured,
+    /// or one that cannot be opened — do not fail the query: they produce a
+    /// record whose location fields are NULL and whose `error` field carries
+    /// the reason.
     fn lookup_row(
         &self,
         ips: &StringArray,
         paths: Option<&StringArray>,
         row: usize,
-    ) -> Result<Option<GeoRecord>> {
+    ) -> Option<GeoRecord> {
         if ips.is_null(row) {
-            return Ok(None);
+            return None;
         }
         // Parse before touching the database so bad addresses are NULL even
         // when no database is configured
         let Ok(ip) = ips.value(row).parse::<IpAddr>() else {
-            return Ok(None);
+            return None;
         };
         let path: PathBuf = match (paths, &self.default_db) {
-            (Some(paths), _) if paths.is_null(row) => return Ok(None),
+            (Some(paths), _) if paths.is_null(row) => return None,
             (Some(paths), _) => PathBuf::from(paths.value(row)),
             (None, Some(default)) => default.clone(),
             (None, None) => {
-                return exec_err!(
+                return Some(GeoRecord::from_error(format!(
                     "geoip has no database configured; pass a path as the second argument \
                      (e.g. geoip(ip, '/path/GeoLite2-City.mmdb')) or set the \
                      {GEOIP_DB_ENV_VAR} environment variable"
-                )
+                )))
             }
         };
-        let reader = Self::reader_for(&path)?;
+        let reader = match Self::reader_for(&path) {
+            Ok(reader) => reader,
+            Err(open_error) => return Some(GeoRecord::from_error(open_error.as_ref())),
+        };
         // Lookup errors (e.g. an IPv6 address in an IPv4-only database) are
-        // row-level data issues, not query errors
-        let record = reader
+        // row-level data issues, treated as misses
+        reader
             .lookup(ip)
             .ok()
             .and_then(|result| result.decode::<geoip2::City>().ok().flatten())
-            .map(|city| GeoRecord::from_city(&city));
-        Ok(record)
+            .map(|city| GeoRecord::from_city(&city))
     }
 }
 

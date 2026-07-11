@@ -79,28 +79,42 @@ pub struct CaptureFunc {}
 
 impl TableFunctionImpl for CaptureFunc {
     fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
-        if exprs.is_empty() || exprs.len() > 3 {
-            return plan_err!(
-                "capture requires 1 to 3 arguments: interface name, optional BPF filter, optional duration in seconds"
-            );
-        }
-        let interface = expr_to_string(&exprs[0], "capture", "interface (first argument)")?;
-        let filter = exprs
-            .get(1)
-            .map(|e| expr_to_string(e, "capture", "BPF filter (second argument)"))
-            .transpose()?
-            .unwrap_or_default();
-        let duration = exprs.get(2).map(expr_to_duration).transpose()?;
+        let (interface, filter, duration) = parse_capture_args("capture", exprs)?;
         Ok(Arc::new(CaptureTable::new(interface, filter, duration)))
     }
 }
 
-fn expr_to_duration(expr: &Expr) -> Result<Duration> {
+/// Parses the arguments shared by `capture` and `capture_wide` (hence the
+/// function name parameter): interface name, optional BPF filter, optional
+/// duration in seconds
+pub(crate) fn parse_capture_args(
+    func: &str,
+    exprs: &[Expr],
+) -> Result<(String, String, Option<Duration>)> {
+    if exprs.is_empty() || exprs.len() > 3 {
+        return plan_err!(
+            "{func} requires 1 to 3 arguments: interface name, optional BPF filter, optional duration in seconds"
+        );
+    }
+    let interface = expr_to_string(&exprs[0], func, "interface (first argument)")?;
+    let filter = exprs
+        .get(1)
+        .map(|e| expr_to_string(e, func, "BPF filter (second argument)"))
+        .transpose()?
+        .unwrap_or_default();
+    let duration = exprs
+        .get(2)
+        .map(|e| expr_to_duration(func, e))
+        .transpose()?;
+    Ok((interface, filter, duration))
+}
+
+fn expr_to_duration(func: &str, expr: &Expr) -> Result<Duration> {
     match expr {
         Expr::Literal(ScalarValue::Int64(Some(secs)), _) if *secs > 0 => {
             Ok(Duration::from_secs(*secs as u64))
         }
-        _ => plan_err!("capture duration (third argument) must be a positive integer of seconds"),
+        _ => plan_err!("{func} duration (third argument) must be a positive integer of seconds"),
     }
 }
 
@@ -321,6 +335,9 @@ fn read_live(
         match capture.next_packet() {
             Ok(packet) => {
                 frame_number += 1;
+                // tv_sec/tv_usec widths vary by platform (i64 on macOS,
+                // where these casts are no-ops)
+                #[allow(clippy::unnecessary_cast)]
                 let ts_micros =
                     packet.header.ts.tv_sec as i64 * 1_000_000 + packet.header.ts.tv_usec as i64;
                 let decoded = decode_frame(link_type, packet.data);

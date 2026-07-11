@@ -35,6 +35,30 @@ Without a duration the source is unbounded: use a `LIMIT` or the query
 streams until cancelled. Live capture requires elevated privileges (sudo,
 `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS).
 
+### `pcap_wide(path)` and `capture_wide(interface [, bpf_filter [, duration_secs]])`
+
+Wide variants of `pcap` and `capture` (same arguments, `capture_wide`
+requires the `live` feature) that append DNS and geolocation enrichment
+columns for the source and destination addresses: `src_host` / `dst_host`
+(reverse DNS) and `src_country`, `src_city`, `src_lat`, `src_lon` plus the
+`dst_` equivalents (from the `geoip` machinery and a MaxMind-format
+database):
+
+```sql
+SELECT dst_ip, dst_host, dst_country, count(*) AS packets
+FROM pcap_wide('capture.pcap')
+GROUP BY dst_ip, dst_host, dst_country
+ORDER BY packets DESC;
+```
+
+The geolocation database comes from the `GEOIP_DB` environment variable or a
+path passed to `PcapWideFunc::new` / `CaptureWideFunc::new` (see the `geoip`
+section below for which database populates which fields). A database that is
+unconfigured, missing, or unreadable never fails the query — the geolocation
+columns are just `NULL` (use `geoip(ip, path)['error']` to see why).
+Enrichment is a projection over the narrow table, so unused columns still
+prune and only projected enrichment is computed.
+
 ### `interfaces()`
 
 Requires the `live` feature. Lists the system's network capture interfaces
@@ -74,9 +98,9 @@ out yield `NULL`.
 
 ### `geoip(ip [, db_path])`
 
-Geolocates an IP address using a MaxMind-format (`.mmdb`) database such as
-the free [GeoLite2-City] database. Returns a struct with `country_code`,
-`country`, `city`, `latitude`, `longitude`, and `time_zone` fields:
+Geolocates an IP address using a MaxMind-format (`.mmdb`) database. Returns
+a struct with `country_code`, `country`, `city`, `latitude`, `longitude`,
+`time_zone`, and `error` fields:
 
 ```sql
 SELECT geoip(src_ip, '/path/GeoLite2-City.mmdb')['country_code'] AS country,
@@ -86,12 +110,32 @@ GROUP BY country
 ORDER BY packets DESC;
 ```
 
+**Which database?** A single database file serves every field — there is no
+per-field database. Which fields are populated depends on the database's
+schema:
+
+| Field                                          | City database | Country database | ASN / other |
+| ---------------------------------------------- | ------------- | ---------------- | ----------- |
+| `country_code`, `country`                      | ✓             | ✓                | `NULL`      |
+| `city`, `latitude`, `longitude`, `time_zone`   | ✓             | `NULL`           | `NULL`      |
+
+Use a City-schema database for full coverage: [GeoLite2-City] (free with a
+MaxMind account) or the commercial GeoIP2-City. A Country-schema database
+(GeoLite2-Country) is smaller if only country-level fields are needed.
+
 The single-argument form uses the database from the `GEOIP_DB` environment
 variable (read when the UDF is constructed), or the path passed to
 `GeoIpUdf::with_db_path`. Opened databases are cached process-wide.
 
 Addresses that fail to parse or have no entry in the database yield a `NULL`
-struct; a database that cannot be opened is a query error.
+struct. A database that is missing, unreadable, or unconfigured does not
+fail the query: the location fields are `NULL` and the `error` field (which
+is `NULL` on success) carries the reason:
+
+```sql
+SELECT geoip(src_ip)['error'] FROM pcap('capture.pcap') LIMIT 1;
+-- geoip failed to open database '/path/GeoLite2-City.mmdb': ...
+```
 
 [GeoLite2-City]: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
 

@@ -154,6 +154,49 @@ async fn test_interfaces_lists_devices() {
 }
 
 #[tokio::test]
+async fn test_pcap_wide_adds_enrichment_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    write_test_pcap(&dir.path().join("test.pcap"));
+    let execution = TestExecution::new().await;
+    // The fixture's private 10.0.0.0/8 addresses are absent from any
+    // geolocation database (and none is configured in the test environment),
+    // so the geo columns are NULL. This exercises that the wide schema is
+    // present and the query executes.
+    let sql = format!(
+        "SELECT src_ip, src_country, src_city, src_lat, src_lon \
+         FROM pcap_wide('{}/test.pcap') WHERE dst_port = 443",
+        dir.path().display()
+    );
+    let output = execution.run_and_format(&sql).await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +----------+-------------+----------+---------+---------+
+    - "| src_ip   | src_country | src_city | src_lat | src_lon |"
+    - +----------+-------------+----------+---------+---------+
+    - "| 10.0.0.1 |             |          |         |         |"
+    - +----------+-------------+----------+---------+---------+
+    "#);
+
+    // The reverse DNS columns are environment dependent; only exercise that
+    // they project and the query executes
+    let sql = format!(
+        "SELECT src_host, dst_host FROM pcap_wide('{}/test.pcap')",
+        dir.path().display()
+    );
+    let result = execution.run(&sql).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_capture_wide_explain_does_not_open_device() {
+    let execution = TestExecution::new().await;
+    // Like capture, planning capture_wide must not open a device
+    let result = execution
+        .run("EXPLAIN SELECT src_ip, src_host, src_country FROM capture_wide('definitely-not-a-device', 'tcp', 5)")
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
 async fn test_reverse_dns_loopback() {
     let execution = TestExecution::new().await;
     // The loopback address must resolve to some hostname on any host with a
@@ -210,18 +253,24 @@ async fn test_geoip_invalid_ip_is_null() {
 }
 
 #[tokio::test]
-async fn test_geoip_unopenable_db_errors() {
+async fn test_geoip_unopenable_db_reported_in_error_field() {
     let execution = TestExecution::new().await;
-    // A database that cannot be opened is a query error (unlike per-row
-    // misses, which are NULL)
-    let result = execution
-        .run("SELECT geoip('1.1.1.1', '/definitely/missing.mmdb')")
+    // A database that cannot be opened does not fail the query: the
+    // location fields are NULL and the struct's error field carries the
+    // reason
+    let output = execution
+        .run_and_format(
+            "SELECT geoip('1.1.1.1', '/definitely/missing.mmdb')['country_code'] IS NULL AS no_country, \
+                    geoip('1.1.1.1', '/definitely/missing.mmdb')['error'] LIKE '%failed to open database%' AS reported",
+        )
         .await;
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("geoip failed to open database"),
-        "unexpected error: {err}"
-    );
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +------------+----------+
+    - "| no_country | reported |"
+    - +------------+----------+
+    - "| true       | true     |"
+    - +------------+----------+
+    "#);
 }
 
 #[tokio::test]
@@ -236,13 +285,18 @@ async fn test_geoip_db_path_from_config() {
     config.cli.execution.net.geoip_db_path = Some(db_path.into());
     let execution = TestExecution::new_with_config(config).await;
     // The configured path reaches the single-argument form of geoip: the
-    // lookup fails to open that (nonexistent) database rather than
-    // complaining that no database is configured
-    let result = execution.run("SELECT geoip('1.1.1.1')").await;
-    let err = result.unwrap_err().to_string();
+    // error field reports a failure to open that (nonexistent) database
+    // rather than complaining that no database is configured
+    let batches = execution
+        .run("SELECT geoip('1.1.1.1')['error'] AS error")
+        .await
+        .unwrap();
+    let formatted = datafusion::arrow::util::pretty::pretty_format_batches(&batches)
+        .unwrap()
+        .to_string();
     assert!(
-        err.contains(&format!("geoip failed to open database '{db_path}'")),
-        "unexpected error: {err}"
+        formatted.contains(&format!("geoip failed to open database '{db_path}'")),
+        "unexpected output: {formatted}"
     );
 }
 

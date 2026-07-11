@@ -61,12 +61,18 @@ pub struct PcapFunc {}
 
 impl TableFunctionImpl for PcapFunc {
     fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
-        if exprs.len() != 1 {
-            return plan_err!("pcap requires a single argument, the path to a pcap/pcapng file");
-        }
-        let path = expr_to_string(&exprs[0], "pcap", "path (first argument)")?;
+        let path = parse_pcap_args("pcap", exprs)?;
         Ok(Arc::new(PcapTable::new(path)))
     }
+}
+
+/// Parses the arguments shared by `pcap` and `pcap_wide` (hence the function
+/// name parameter): a single path to a pcap/pcapng file
+pub(crate) fn parse_pcap_args(func: &str, exprs: &[Expr]) -> Result<String> {
+    if exprs.len() != 1 {
+        return plan_err!("{func} requires a single argument, the path to a pcap/pcapng file");
+    }
+    expr_to_string(&exprs[0], func, "path (first argument)")
 }
 
 /// [`TableProvider`] backed by a pcap/pcapng file

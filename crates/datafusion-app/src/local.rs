@@ -137,15 +137,24 @@ impl ExecutionContext {
                 Arc::new(datafusion_net::InterfacesFunc::default()),
             );
             session_ctx.register_udf(ScalarUDF::from(datafusion_net::ReverseDnsUdf::default()));
-            // The GEOIP_DB environment variable (read by GeoIpUdf::default)
-            // takes precedence over the configured database path
-            let geoip = match &config.net.geoip_db_path {
-                Some(path) if std::env::var_os(datafusion_net::GEOIP_DB_ENV_VAR).is_none() => {
-                    datafusion_net::GeoIpUdf::with_db_path(path)
-                }
-                _ => datafusion_net::GeoIpUdf::default(),
+            // The GEOIP_DB environment variable takes precedence over the
+            // configured database path
+            let geoip_db_path = std::env::var_os(datafusion_net::GEOIP_DB_ENV_VAR)
+                .map(std::path::PathBuf::from)
+                .or_else(|| config.net.geoip_db_path.clone());
+            let geoip = match &geoip_db_path {
+                Some(path) => datafusion_net::GeoIpUdf::with_db_path(path),
+                None => datafusion_net::GeoIpUdf::default(),
             };
             session_ctx.register_udf(ScalarUDF::from(geoip));
+            session_ctx.register_udtf(
+                "pcap_wide",
+                Arc::new(datafusion_net::PcapWideFunc::new(geoip_db_path.clone())),
+            );
+            session_ctx.register_udtf(
+                "capture_wide",
+                Arc::new(datafusion_net::CaptureWideFunc::new(geoip_db_path)),
+            );
         }
 
         let catalog = create_app_catalog(config, app_name, app_version)?;
