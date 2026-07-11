@@ -60,8 +60,17 @@
 
 use datafusion::{
     common::{plan_err, Column, Result},
+    logical_expr::DocSection,
     prelude::Expr,
     scalar::ScalarValue,
+};
+
+/// The `SHOW FUNCTIONS` documentation section shared by this crate's scalar
+/// UDFs. Groups them under one heading in the information schema.
+pub(crate) const NET_DOC_SECTION: DocSection = DocSection {
+    include: true,
+    label: "Network Functions",
+    description: Some("Functions for enriching and decoding packet capture data"),
 };
 
 mod conversations;

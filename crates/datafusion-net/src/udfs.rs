@@ -34,7 +34,7 @@
 use std::{
     collections::HashMap,
     net::IpAddr,
-    sync::{mpsc, Arc, Mutex, OnceLock},
+    sync::{mpsc, Arc, LazyLock, Mutex, OnceLock},
     thread,
     time::{Duration, Instant},
 };
@@ -46,9 +46,30 @@ use datafusion::{
     },
     common::{cast::as_string_array, exec_err, Result},
     logical_expr::{
-        ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+        ColumnarValue, Documentation, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
+        Volatility,
     },
 };
+
+use crate::NET_DOC_SECTION;
+
+/// `SHOW FUNCTIONS` documentation for `reverse_dns`
+static DOCUMENTATION: LazyLock<Documentation> = LazyLock::new(|| {
+    Documentation::builder(
+        NET_DOC_SECTION,
+        "Resolves an IP address string to a hostname via a reverse DNS (PTR) \
+         lookup using the system resolver. Returns NULL when the address does \
+         not parse, does not resolve, or the lookup times out. Results are \
+         cached process-wide and each batch of lookups is bounded by a timeout.",
+        "reverse_dns(ip)",
+    )
+    .with_argument("ip", "IP address string, e.g. the src_ip or dst_ip column")
+    .with_sql_example(
+        "SELECT dst_ip, reverse_dns(dst_ip) AS host, count(*) AS packets \
+         FROM pcap('capture.pcap') GROUP BY dst_ip, host ORDER BY packets DESC",
+    )
+    .build()
+});
 
 /// Maximum wall-clock time spent resolving the unique addresses in a single
 /// batch. A dead or slow resolver cannot hang the query longer than this;
@@ -108,6 +129,10 @@ impl ScalarUDFImpl for ReverseDnsUdf {
         let array = args.args[0].to_array(args.number_rows)?;
         let resolved = resolve_array(&array)?;
         Ok(ColumnarValue::Array(resolved))
+    }
+
+    fn documentation(&self) -> Option<&Documentation> {
+        Some(&DOCUMENTATION)
     }
 }
 

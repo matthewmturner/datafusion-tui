@@ -52,7 +52,7 @@ use std::{
     collections::HashMap,
     net::IpAddr,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, LazyLock, Mutex, OnceLock},
 };
 
 use datafusion::{
@@ -65,14 +65,47 @@ use datafusion::{
     },
     common::{cast::as_string_array, exec_err, Result},
     logical_expr::{
-        ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+        ColumnarValue, Documentation, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
+        Volatility,
     },
 };
 use maxminddb::geoip2;
 
+use crate::NET_DOC_SECTION;
+
 /// Environment variable consulted by [`GeoIpUdf::default`] for the database
 /// path used by the single-argument form of `geoip`
 pub const GEOIP_DB_ENV_VAR: &str = "GEOIP_DB";
+
+/// `SHOW FUNCTIONS` documentation for `geoip`
+static DOCUMENTATION: LazyLock<Documentation> = LazyLock::new(|| {
+    Documentation::builder(
+        NET_DOC_SECTION,
+        "Geolocates an IP address string using a MaxMind-format (.mmdb) \
+         database, returning a struct with country_code, country, city, \
+         latitude, longitude, time_zone, and error fields. A City-schema \
+         database populates all fields; a Country-schema database only \
+         country_code and country. The database path is the optional second \
+         argument, the GEOIP_DB environment variable, or (in dft) the \
+         [execution.net] geoip_db_path config. Addresses that do not parse or \
+         are absent from the database yield a NULL struct; a missing or \
+         unreadable database yields NULL location fields with the reason in \
+         the error field rather than failing the query.",
+        "geoip(ip [, db_path])",
+    )
+    .with_argument("ip", "IP address string, e.g. the src_ip or dst_ip column")
+    .with_argument(
+        "db_path",
+        "Optional path to a MaxMind .mmdb database; defaults to the GEOIP_DB \
+         environment variable or configured path",
+    )
+    .with_sql_example(
+        "SELECT geoip(src_ip, '/path/GeoLite2-City.mmdb')['country_code'] AS country, \
+         count(*) AS packets FROM pcap('capture.pcap') GROUP BY country ORDER BY packets DESC",
+    )
+    .with_related_udf("reverse_dns")
+    .build()
+});
 
 /// A cached, shared handle to an opened database
 type SharedReader = Arc<maxminddb::Reader<Vec<u8>>>;
@@ -267,6 +300,10 @@ impl ScalarUDFImpl for GeoIpUdf {
         ];
         let structs = StructArray::new(geoip_fields(), arrays, validity.finish());
         Ok(ColumnarValue::Array(Arc::new(structs)))
+    }
+
+    fn documentation(&self) -> Option<&Documentation> {
+        Some(&DOCUMENTATION)
     }
 }
 

@@ -35,7 +35,7 @@
 //! The ClientHello must fit in the payload (it usually does — it is small and
 //! sent first); this UDF does not reassemble segments.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use datafusion::{
     arrow::{
@@ -44,9 +44,37 @@ use datafusion::{
     },
     common::{cast::as_binary_array, exec_err, Result},
     logical_expr::{
-        ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+        ColumnarValue, Documentation, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
+        Volatility,
     },
 };
+
+use crate::NET_DOC_SECTION;
+
+/// `SHOW FUNCTIONS` documentation for `tls_sni`
+static DOCUMENTATION: LazyLock<Documentation> = LazyLock::new(|| {
+    Documentation::builder(
+        NET_DOC_SECTION,
+        "Extracts the Server Name Indication (SNI) host name from a TLS \
+         ClientHello in a packet payload (typically TCP port 443), or NULL \
+         when the payload is not a ClientHello or carries no SNI. The \
+         ClientHello is unencrypted even for HTTPS, so this reveals the \
+         destination host of otherwise opaque connections. The ClientHello \
+         must fit in the payload; segments are not reassembled.",
+        "tls_sni(payload)",
+    )
+    .with_argument(
+        "payload",
+        "Binary packet payload, e.g. the payload column of a TLS packet",
+    )
+    .with_sql_example(
+        "SELECT tls_sni(payload) AS host, count(*) AS hellos \
+         FROM pcap('capture.pcap') WHERE tls_sni(payload) IS NOT NULL \
+         GROUP BY host ORDER BY hellos DESC",
+    )
+    .with_related_udf("dns_query")
+    .build()
+});
 
 /// Scalar UDF that extracts the SNI host name from a TLS ClientHello
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -100,6 +128,10 @@ impl ScalarUDFImpl for TlsSniUdf {
             out.append_option(sni);
         }
         Ok(ColumnarValue::Array(Arc::new(out.finish()) as ArrayRef))
+    }
+
+    fn documentation(&self) -> Option<&Documentation> {
+        Some(&DOCUMENTATION)
     }
 }
 
@@ -339,6 +371,14 @@ mod tests {
             udf.return_type(&[DataType::Binary]).unwrap(),
             DataType::Utf8
         );
+    }
+
+    #[test]
+    fn test_has_documentation() {
+        let udf = TlsSniUdf::default();
+        let doc = udf.documentation().unwrap();
+        assert_eq!(doc.syntax_example, "tls_sni(payload)");
+        assert!(doc.arguments.is_some());
     }
 
     #[tokio::test]

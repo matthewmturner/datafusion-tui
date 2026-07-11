@@ -153,6 +153,58 @@ async fn test_interfaces_lists_devices() {
     "#);
 }
 
+#[tokio::test]
+async fn test_show_functions_documents_udfs() {
+    let execution = TestExecution::new().await;
+    // Each scalar UDF's description and syntax come from its documentation()
+    // implementation, which is what `SHOW FUNCTIONS` displays. Query the
+    // routines table (which `SHOW FUNCTIONS` is rewritten to join against)
+    // for the two documented columns.
+    let output = execution
+        .run_and_format(
+            "SELECT routine_name, syntax_example FROM information_schema.routines \
+             WHERE routine_name IN ('reverse_dns', 'geoip', 'dns_query', 'tls_sni') \
+             ORDER BY routine_name",
+        )
+        .await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +--------------+-----------------------+
+    - "| routine_name | syntax_example        |"
+    - +--------------+-----------------------+
+    - "| dns_query    | dns_query(payload)    |"
+    - "| geoip        | geoip(ip [, db_path]) |"
+    - "| reverse_dns  | reverse_dns(ip)       |"
+    - "| tls_sni      | tls_sni(payload)      |"
+    - +--------------+-----------------------+
+    "#);
+
+    // Every one of them also carries a non-empty description
+    let with_descriptions = execution
+        .run(
+            "SELECT routine_name FROM information_schema.routines \
+              WHERE routine_name IN ('reverse_dns', 'geoip', 'dns_query', 'tls_sni') \
+              AND description IS NOT NULL AND length(description) > 0",
+        )
+        .await
+        .unwrap();
+    let rows: usize = with_descriptions.iter().map(|b| b.num_rows()).sum();
+    assert_eq!(rows, 4, "expected all four UDFs to have descriptions");
+
+    // And `SHOW FUNCTIONS` itself surfaces the documentation end to end
+    let show = execution
+        .run_and_format("SHOW FUNCTIONS LIKE 'tls_sni'")
+        .await;
+    let joined = show.join("\n");
+    assert!(
+        joined.contains("Server Name Indication"),
+        "SHOW FUNCTIONS should include the description:\n{joined}"
+    );
+    assert!(
+        joined.contains("tls_sni(payload)"),
+        "SHOW FUNCTIONS should include the syntax example:\n{joined}"
+    );
+}
+
 /// A minimal DNS query for `example.com` A record
 fn dns_query_bytes() -> Vec<u8> {
     let mut m = vec![

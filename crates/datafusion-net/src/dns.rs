@@ -36,7 +36,7 @@
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr},
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use datafusion::{
@@ -49,9 +49,35 @@ use datafusion::{
     },
     common::{cast::as_binary_array, exec_err, Result},
     logical_expr::{
-        ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+        ColumnarValue, Documentation, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
+        Volatility,
     },
 };
+
+use crate::NET_DOC_SECTION;
+
+/// `SHOW FUNCTIONS` documentation for `dns_query`
+static DOCUMENTATION: LazyLock<Documentation> = LazyLock::new(|| {
+    Documentation::builder(
+        NET_DOC_SECTION,
+        "Decodes a DNS message from a packet payload (typically UDP port 53), \
+         returning a struct with is_response (Boolean), name and query_type \
+         (from the first question), response_code (NULL for queries), and \
+         answers (a list of A/AAAA addresses and CNAME/NS/PTR names, NULL for \
+         queries). Payloads that do not parse as DNS yield a NULL struct.",
+        "dns_query(payload)",
+    )
+    .with_argument(
+        "payload",
+        "Binary packet payload, e.g. the payload column of a DNS packet",
+    )
+    .with_sql_example(
+        "SELECT dns_query(payload)['name'] AS name, count(*) AS queries \
+         FROM pcap('capture.pcap') WHERE dst_port = 53 GROUP BY name ORDER BY queries DESC",
+    )
+    .with_related_udf("tls_sni")
+    .build()
+});
 
 /// Fields of the struct returned by `dns_query`
 fn dns_fields() -> Fields {
@@ -160,6 +186,10 @@ impl ScalarUDFImpl for DnsQueryUdf {
         ];
         let structs = StructArray::new(dns_fields(), arrays, validity.finish());
         Ok(ColumnarValue::Array(Arc::new(structs)))
+    }
+
+    fn documentation(&self) -> Option<&Documentation> {
+        Some(&DOCUMENTATION)
     }
 }
 
