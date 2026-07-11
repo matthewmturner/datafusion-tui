@@ -61,8 +61,11 @@ pub struct TestExecution {
 #[allow(dead_code)]
 impl TestExecution {
     pub async fn new() -> Self {
-        let config = AppConfig::default();
+        Self::new_with_config(AppConfig::default()).await
+    }
 
+    /// Like [`Self::new`] but with a caller-provided config
+    pub async fn new_with_config(config: AppConfig) -> Self {
         let session_state = DftSessionStateBuilder::try_new(Some(config.cli.execution.clone()))
             .unwrap()
             .with_extensions()

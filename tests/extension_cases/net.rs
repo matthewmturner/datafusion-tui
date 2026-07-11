@@ -175,6 +175,61 @@ async fn test_reverse_dns_invalid_input_is_null() {
 }
 
 #[tokio::test]
+async fn test_geoip_invalid_ip_is_null() {
+    let execution = TestExecution::new().await;
+    // geoip parses the address before resolving the database, so an
+    // unparseable address yields NULL even with a database path that does
+    // not exist
+    let output = execution
+        .run_and_format("SELECT geoip('not-an-ip', '/definitely/missing.mmdb') IS NULL AS missing")
+        .await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +---------+
+    - "| missing |"
+    - +---------+
+    - "| true    |"
+    - +---------+
+    "#);
+}
+
+#[tokio::test]
+async fn test_geoip_unopenable_db_errors() {
+    let execution = TestExecution::new().await;
+    // A database that cannot be opened is a query error (unlike per-row
+    // misses, which are NULL)
+    let result = execution
+        .run("SELECT geoip('1.1.1.1', '/definitely/missing.mmdb')")
+        .await;
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("geoip failed to open database"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn test_geoip_db_path_from_config() {
+    // The GEOIP_DB environment variable takes precedence over the config
+    // value, so the config path is only observable when it is not set
+    if std::env::var_os(datafusion_net::GEOIP_DB_ENV_VAR).is_some() {
+        return;
+    }
+    let mut config = datafusion_dft::config::AppConfig::default();
+    let db_path = "/config/provided/db.mmdb";
+    config.cli.execution.net.geoip_db_path = Some(db_path.into());
+    let execution = TestExecution::new_with_config(config).await;
+    // The configured path reaches the single-argument form of geoip: the
+    // lookup fails to open that (nonexistent) database rather than
+    // complaining that no database is configured
+    let result = execution.run("SELECT geoip('1.1.1.1')").await;
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains(&format!("geoip failed to open database '{db_path}'")),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
 async fn test_reverse_dns_over_pcap() {
     let dir = tempfile::tempdir().unwrap();
     write_test_pcap(&dir.path().join("test.pcap"));

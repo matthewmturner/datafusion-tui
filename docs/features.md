@@ -89,6 +89,20 @@ FROM capture('en0', 'tcp', 10) GROUP BY dst_ip, host ORDER BY packets DESC
 
 Lookups are cached and bounded by a timeout; addresses that fail to parse, fail to resolve, or time out yield `NULL`.
 
+There is also a `geoip` scalar function that geolocates an IP address using a MaxMind-format (`.mmdb`) database such as the free [GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) database, returning a struct with `country_code`, `country`, `city`, `latitude`, `longitude`, and `time_zone` fields:
+
+```sql
+SELECT geoip(src_ip, '/path/GeoLite2-City.mmdb')['country_code'] AS country, count(*) AS packets
+FROM pcap('capture.pcap') GROUP BY country ORDER BY packets DESC
+```
+
+The database path can also come from the `GEOIP_DB` environment variable or the `geoip_db_path` entry in the `[execution.net]` config section (the environment variable takes precedence), in which case the second argument can be omitted.  Addresses that fail to parse or have no entry in the database yield `NULL`; a database that cannot be opened is a query error.
+
+```toml
+[execution.net]
+geoip_db_path = "/path/to/GeoLite2-City.mmdb"
+```
+
 ## External Features
 
 `dft` also has several external optional (conditionally compiled features) integrations which are controlled by [Rust Crate Features]

@@ -22,6 +22,12 @@
 //! - [`CaptureFunc`] (`capture`, requires the `live` feature): streams
 //!   live-captured packets from a network interface
 //!
+//! Scalar UDFs for enriching the IP columns:
+//!
+//! - [`ReverseDnsUdf`] (`reverse_dns`): resolves an IP address to a hostname
+//! - [`GeoIpUdf`] (`geoip`): geolocates an IP address using a MaxMind-format
+//!   (`.mmdb`) database
+//!
 //! ```sql
 //! -- Query a capture file
 //! SELECT src_ip, dst_ip, protocol FROM pcap('capture.pcap') WHERE dst_port = 443;
@@ -49,6 +55,7 @@ use datafusion::{
 
 pub mod decode;
 mod file;
+mod geoip;
 #[cfg(feature = "live")]
 mod live;
 mod schema;
@@ -56,6 +63,7 @@ mod udfs;
 pub mod writer;
 
 pub use file::{PcapFunc, PcapTable};
+pub use geoip::{GeoIpUdf, GEOIP_DB_ENV_VAR};
 #[cfg(feature = "live")]
 pub use live::{CaptureFunc, CaptureTable};
 pub use schema::packet_schema;

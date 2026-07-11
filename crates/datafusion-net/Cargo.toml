@@ -15,6 +15,7 @@ async-trait = "0.1.80"
 datafusion = { version = "54" }
 dns-lookup = "3"
 etherparse = "0.20"
+maxminddb = "0.29"
 pcap = { optional = true, version = "2.4" }
 pcap-parser = "0.17"
 tokio = { features = ["sync"], version = "1" }

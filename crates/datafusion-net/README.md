@@ -55,6 +55,29 @@ addresses within a batch are resolved once, and each batch of lookups is
 bounded by a timeout. Addresses that fail to parse, fail to resolve, or time
 out yield `NULL`.
 
+### `geoip(ip [, db_path])`
+
+Geolocates an IP address using a MaxMind-format (`.mmdb`) database such as
+the free [GeoLite2-City] database. Returns a struct with `country_code`,
+`country`, `city`, `latitude`, `longitude`, and `time_zone` fields:
+
+```sql
+SELECT geoip(src_ip, '/path/GeoLite2-City.mmdb')['country_code'] AS country,
+       count(*) AS packets
+FROM pcap('capture.pcap')
+GROUP BY country
+ORDER BY packets DESC;
+```
+
+The single-argument form uses the database from the `GEOIP_DB` environment
+variable (read when the UDF is constructed), or the path passed to
+`GeoIpUdf::with_db_path`. Opened databases are cached process-wide.
+
+Addresses that fail to parse or have no entry in the database yield a `NULL`
+struct; a database that cannot be opened is a query error.
+
+[GeoLite2-City]: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+
 ## Schema
 
 One row per captured frame. Layers that cannot be decoded (non-IP traffic,

@@ -158,6 +158,13 @@ Set the number of iterations for benchmarking queries (10 is the default).
 benchmark_iterations = 10
 ```
 
+With the `net` feature enabled, the MaxMind-format (`.mmdb`) database used by the single-argument form of the `geoip` function can be configured (the `GEOIP_DB` environment variable takes precedence over this value).
+
+```toml
+[execution.net]
+geoip_db_path = "/path/to/GeoLite2-City.mmdb"
+```
+
 The batch size for query execution can be configured based on the app being used (TUI, CLI, or FlightSQL Server). For the TUI it defaults to 100, which may slow down queries, because a Record Batch is used as a unit of pagination and too many rows can cause the TUI to hang. For the CLI and FlightSQL Server, the default is 8092.
 
 ```toml
