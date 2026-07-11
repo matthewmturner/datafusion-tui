@@ -132,6 +132,10 @@ impl ExecutionContext {
 
             session_ctx.register_udtf("pcap", Arc::new(datafusion_net::PcapFunc::default()));
             session_ctx.register_udtf("capture", Arc::new(datafusion_net::CaptureFunc::default()));
+            session_ctx.register_udtf(
+                "interfaces",
+                Arc::new(datafusion_net::InterfacesFunc::default()),
+            );
             session_ctx.register_udf(ScalarUDF::from(datafusion_net::ReverseDnsUdf::default()));
             // The GEOIP_DB environment variable (read by GeoIpUdf::default)
             // takes precedence over the configured database path

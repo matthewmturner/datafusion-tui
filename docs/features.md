@@ -80,6 +80,12 @@ SELECT src_ip, count(*) FROM capture('en0', 'tcp port 443', 10) GROUP BY src_ip;
 
 Without a duration the live capture is unbounded: use a `LIMIT` or the query streams until cancelled.  Live capture requires elevated privileges (sudo, `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS) and links against libpcap (`libpcap-dev` on Debian/Ubuntu; included with macOS).
 
+`interfaces` lists the system's network capture interfaces (similar to `tshark -D`) with their addresses and status flags, which is useful for discovering what to pass to `capture`.  Listing does not require elevated privileges:
+
+```sql
+SELECT name, description, addresses FROM interfaces() WHERE is_up AND NOT is_loopback
+```
+
 The feature also adds a `reverse_dns` scalar function that resolves an IP address string to a hostname via reverse DNS (PTR) lookup, which pairs naturally with the `src_ip` / `dst_ip` columns:
 
 ```sql

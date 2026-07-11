@@ -170,7 +170,7 @@ The project is organized as a workspace with multiple crates:
 
 - **`crates/datafusion-udfs-wasm`**: WASM-based UDF support
 
-- **`crates/datafusion-net`**: Network packet capture querying — `pcap` (capture files) and `capture` (live capture, behind its `live` feature) table functions, plus the `reverse_dns` (IP → hostname via PTR lookup) and `geoip` (IP → location via MaxMind `.mmdb` database) scalar UDFs
+- **`crates/datafusion-net`**: Network packet capture querying — `pcap` (capture files), `capture` (live capture), and `interfaces` (list capture devices) table functions (the latter two behind its `live` feature), plus the `reverse_dns` (IP → hostname via PTR lookup) and `geoip` (IP → location via MaxMind `.mmdb` database) scalar UDFs
 
 - **`crates/datafusion-auth`**: Authentication implementations
 

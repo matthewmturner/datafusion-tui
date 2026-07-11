@@ -21,6 +21,8 @@
 //! - [`PcapFunc`] (`pcap`): reads a pcap/pcapng capture file as a table
 //! - [`CaptureFunc`] (`capture`, requires the `live` feature): streams
 //!   live-captured packets from a network interface
+//! - [`InterfacesFunc`] (`interfaces`, requires the `live` feature): lists
+//!   the system's network capture interfaces
 //!
 //! Scalar UDFs for enriching the IP columns:
 //!
@@ -57,6 +59,8 @@ pub mod decode;
 mod file;
 mod geoip;
 #[cfg(feature = "live")]
+mod interfaces;
+#[cfg(feature = "live")]
 mod live;
 mod schema;
 mod udfs;
@@ -64,6 +68,8 @@ pub mod writer;
 
 pub use file::{PcapFunc, PcapTable};
 pub use geoip::{GeoIpUdf, GEOIP_DB_ENV_VAR};
+#[cfg(feature = "live")]
+pub use interfaces::{interfaces_schema, InterfacesFunc};
 #[cfg(feature = "live")]
 pub use live::{CaptureFunc, CaptureTable};
 pub use schema::packet_schema;

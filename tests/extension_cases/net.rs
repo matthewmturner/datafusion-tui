@@ -137,6 +137,23 @@ async fn test_capture_explain_does_not_open_device() {
 }
 
 #[tokio::test]
+async fn test_interfaces_lists_devices() {
+    let execution = TestExecution::new().await;
+    // The device list is environment dependent, but any host running the
+    // tests has at least one interface
+    let output = execution
+        .run_and_format("SELECT count(*) >= 1 AS has_interfaces FROM interfaces()")
+        .await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +----------------+
+    - "| has_interfaces |"
+    - +----------------+
+    - "| true           |"
+    - +----------------+
+    "#);
+}
+
+#[tokio::test]
 async fn test_reverse_dns_loopback() {
     let execution = TestExecution::new().await;
     // The loopback address must resolve to some hostname on any host with a

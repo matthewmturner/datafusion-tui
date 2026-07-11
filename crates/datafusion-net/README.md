@@ -35,6 +35,23 @@ Without a duration the source is unbounded: use a `LIMIT` or the query
 streams until cancelled. Live capture requires elevated privileges (sudo,
 `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS).
 
+### `interfaces()`
+
+Requires the `live` feature. Lists the system's network capture interfaces
+(similar to `tshark -D`), one row per interface — useful for discovering
+what to pass to `capture`. Listing does not require elevated privileges:
+
+```sql
+SELECT name, description, addresses, connection_status
+FROM interfaces()
+WHERE is_up AND NOT is_loopback;
+```
+
+Columns: `name` (`Utf8`), `description` (`Utf8`), `addresses`
+(`List<Utf8>`), `is_up`, `is_running`, `is_loopback`, `is_wireless`
+(`Boolean`), and `connection_status` (`Utf8`: `connected`, `disconnected`,
+`unknown`, or `not_applicable`).
+
 ## Scalar functions
 
 ### `reverse_dns(ip)`
