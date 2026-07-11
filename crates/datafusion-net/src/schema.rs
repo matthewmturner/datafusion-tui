@@ -34,7 +34,7 @@ use crate::decode::DecodedPacket;
 
 /// Index of the `payload` column, used to skip materializing packet payloads
 /// when the column is not projected
-pub const PAYLOAD_COLUMN_INDEX: usize = 19;
+pub const PAYLOAD_COLUMN_INDEX: usize = 20;
 
 /// Schema shared by the `pcap` and `capture` table functions. One row per
 /// captured frame; layers that could not be decoded yield null columns.
@@ -62,6 +62,7 @@ pub fn packet_schema() -> SchemaRef {
         Field::new("tcp_flags", DataType::Utf8, true),
         Field::new("tcp_seq", DataType::UInt32, true),
         Field::new("tcp_ack", DataType::UInt32, true),
+        Field::new("tcp_window", DataType::UInt16, true),
         Field::new("payload_length", DataType::UInt32, true),
         Field::new("payload", DataType::Binary, true),
     ]))
@@ -93,6 +94,7 @@ pub struct PacketBatchBuilder {
     tcp_flags: StringBuilder,
     tcp_seq: UInt32Builder,
     tcp_ack: UInt32Builder,
+    tcp_window: UInt16Builder,
     payload_length: UInt32Builder,
     payload: BinaryBuilder,
 }
@@ -121,6 +123,7 @@ impl PacketBatchBuilder {
             tcp_flags: StringBuilder::new(),
             tcp_seq: UInt32Builder::new(),
             tcp_ack: UInt32Builder::new(),
+            tcp_window: UInt16Builder::new(),
             payload_length: UInt32Builder::new(),
             payload: BinaryBuilder::new(),
         }
@@ -152,6 +155,7 @@ impl PacketBatchBuilder {
         self.tcp_flags.append_option(decoded.tcp_flags.as_deref());
         self.tcp_seq.append_option(decoded.tcp_seq);
         self.tcp_ack.append_option(decoded.tcp_ack);
+        self.tcp_window.append_option(decoded.tcp_window);
         self.payload_length
             .append_option(decoded.payload.map(|p| p.len() as u32));
         if self.include_payload {
@@ -195,6 +199,7 @@ impl PacketBatchBuilder {
                 Arc::new(self.tcp_flags.finish()),
                 Arc::new(self.tcp_seq.finish()),
                 Arc::new(self.tcp_ack.finish()),
+                Arc::new(self.tcp_window.finish()),
                 Arc::new(self.payload_length.finish()),
                 Arc::new(self.payload.finish()),
             ],

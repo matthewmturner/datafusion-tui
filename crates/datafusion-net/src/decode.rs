@@ -57,6 +57,7 @@ pub struct DecodedPacket<'a> {
     pub tcp_flags: Option<String>,
     pub tcp_seq: Option<u32>,
     pub tcp_ack: Option<u32>,
+    pub tcp_window: Option<u16>,
     pub payload: Option<&'a [u8]>,
 }
 
@@ -121,6 +122,7 @@ pub fn decode_frame(link_type: u32, data: &[u8]) -> DecodedPacket<'_> {
             decoded.tcp_flags = Some(tcp_flags_string(tcp));
             decoded.tcp_seq = Some(tcp.sequence_number());
             decoded.tcp_ack = Some(tcp.acknowledgment_number());
+            decoded.tcp_window = Some(tcp.window_size());
             decoded.payload = Some(tcp.payload());
         }
         Some(TransportSlice::Udp(udp)) => {
@@ -232,6 +234,7 @@ mod tests {
         assert_eq!(decoded.tcp_flags.as_deref(), Some("SYN|ACK"));
         assert_eq!(decoded.tcp_seq, Some(1000));
         assert_eq!(decoded.tcp_ack, Some(7));
+        assert_eq!(decoded.tcp_window, Some(1024));
         assert_eq!(decoded.payload, Some(payload.as_slice()));
     }
 

@@ -136,7 +136,13 @@ impl ExecutionContext {
                 "interfaces",
                 Arc::new(datafusion_net::InterfacesFunc::default()),
             );
+            session_ctx.register_udtf(
+                "tcp_conversations",
+                Arc::new(datafusion_net::TcpConversationsFunc::default()),
+            );
             session_ctx.register_udf(ScalarUDF::from(datafusion_net::ReverseDnsUdf::default()));
+            session_ctx.register_udf(ScalarUDF::from(datafusion_net::DnsQueryUdf::default()));
+            session_ctx.register_udf(ScalarUDF::from(datafusion_net::TlsSniUdf::default()));
             // The GEOIP_DB environment variable takes precedence over the
             // configured database path
             let geoip_db_path = std::env::var_os(datafusion_net::GEOIP_DB_ENV_VAR)

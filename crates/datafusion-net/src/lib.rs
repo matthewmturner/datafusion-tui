@@ -25,12 +25,19 @@
 //!   the system's network capture interfaces
 //! - [`PcapWideFunc`] / [`CaptureWideFunc`] (`pcap_wide` / `capture_wide`):
 //!   the same tables with DNS and geolocation enrichment columns appended
+//! - [`TcpConversationsFunc`] (`tcp_conversations`): aggregates a capture
+//!   file into one row per TCP connection with flow-level analytics
 //!
 //! Scalar UDFs for enriching the IP columns:
 //!
 //! - [`ReverseDnsUdf`] (`reverse_dns`): resolves an IP address to a hostname
 //! - [`GeoIpUdf`] (`geoip`): geolocates an IP address using a MaxMind-format
 //!   (`.mmdb`) database
+//!
+//! Scalar UDFs for decoding packet payloads:
+//!
+//! - [`DnsQueryUdf`] (`dns_query`): decodes a DNS message from a payload
+//! - [`TlsSniUdf`] (`tls_sni`): extracts the SNI host from a TLS ClientHello
 //!
 //! ```sql
 //! -- Query a capture file
@@ -57,7 +64,9 @@ use datafusion::{
     scalar::ScalarValue,
 };
 
+mod conversations;
 pub mod decode;
+mod dns;
 mod file;
 mod geoip;
 #[cfg(feature = "live")]
@@ -65,10 +74,13 @@ mod interfaces;
 #[cfg(feature = "live")]
 mod live;
 mod schema;
+mod tls;
 mod udfs;
 mod wide;
 pub mod writer;
 
+pub use conversations::{tcp_conversations_schema, TcpConversationsFunc, TcpConversationsTable};
+pub use dns::DnsQueryUdf;
 pub use file::{PcapFunc, PcapTable};
 pub use geoip::{GeoIpUdf, GEOIP_DB_ENV_VAR};
 #[cfg(feature = "live")]
@@ -76,6 +88,7 @@ pub use interfaces::{interfaces_schema, InterfacesFunc};
 #[cfg(feature = "live")]
 pub use live::{CaptureFunc, CaptureTable};
 pub use schema::packet_schema;
+pub use tls::TlsSniUdf;
 pub use udfs::ReverseDnsUdf;
 #[cfg(feature = "live")]
 pub use wide::CaptureWideFunc;

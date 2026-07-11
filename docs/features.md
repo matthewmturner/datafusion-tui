@@ -93,6 +93,13 @@ FROM pcap_wide('capture.pcap') GROUP BY dst_ip, dst_host, dst_country ORDER BY p
 SELECT name, description, addresses FROM interfaces() WHERE is_up AND NOT is_loopback
 ```
 
+`tcp_conversations` aggregates a capture file into one row per TCP connection (like wireshark's "Statistics → Conversations" or `tshark -z conv,tcp`), with per-direction packet/byte/retransmission counts, the handshake RTT, duration, and connection state (`active`, `half_closed`, `closed`, or `reset`).  Direction is from the connection initiator's perspective (`fwd` is initiator → responder):
+
+```sql
+SELECT dst_ip, dst_port, handshake_rtt_ms, retransmissions_fwd, state
+FROM tcp_conversations('capture.pcap') ORDER BY retransmissions_fwd DESC
+```
+
 The feature also adds a `reverse_dns` scalar function that resolves an IP address string to a hostname via reverse DNS (PTR) lookup, which pairs naturally with the `src_ip` / `dst_ip` columns:
 
 ```sql
@@ -119,6 +126,13 @@ geoip_db_path = "/path/to/GeoLite2-City.mmdb"
 ```
 
 Addresses that fail to parse or have no entry in the database yield `NULL`.  A database that is missing, unreadable, or unconfigured does not fail the query: the location fields are `NULL` and the `error` field (`NULL` on success) carries the reason, e.g. `SELECT geoip(src_ip)['error']`.  The same applies to the geolocation columns of `pcap_wide` / `capture_wide`, which are `NULL` when the database is unavailable.
+
+Two payload-decoding scalar functions parse application-layer details out of the `payload` column.  `dns_query(payload)` decodes a DNS message (typically UDP port 53) into a struct with `is_response`, `name`, `query_type`, `response_code`, and `answers` (a list of A/AAAA addresses and CNAME/NS/PTR names).  `tls_sni(payload)` extracts the SNI host name from a TLS ClientHello (typically TCP port 443) — the ClientHello is unencrypted even for HTTPS, so this reveals the destination host of otherwise opaque connections.  Both return `NULL` for payloads that do not parse:
+
+```sql
+SELECT tls_sni(payload) AS host, count(*) AS hellos
+FROM pcap('capture.pcap') WHERE tls_sni(payload) IS NOT NULL GROUP BY host ORDER BY hellos DESC
+```
 
 ## External Features
 

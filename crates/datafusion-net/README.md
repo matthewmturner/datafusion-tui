@@ -76,6 +76,35 @@ Columns: `name` (`Utf8`), `description` (`Utf8`), `addresses`
 (`Boolean`), and `connection_status` (`Utf8`: `connected`, `disconnected`,
 `unknown`, or `not_applicable`).
 
+### `tcp_conversations(path)`
+
+Aggregates a capture file into one row per TCP connection (like wireshark's
+"Statistics → Conversations" or `tshark -z conv,tcp`) — useful for spotting
+slow handshakes, retransmission-heavy flows, and connections that never
+closed cleanly:
+
+```sql
+SELECT dst_ip, dst_port, handshake_rtt_ms, retransmissions_fwd, state
+FROM tcp_conversations('capture.pcap')
+ORDER BY retransmissions_fwd DESC;
+```
+
+Direction is from the connection initiator's perspective: `src_*` is the
+endpoint that sent the first SYN (or, for a capture that starts
+mid-connection, the first endpoint seen sending); `fwd` counts
+initiator → responder and `rev` the reverse.
+
+| Column                                        | Type                     | Notes                                              |
+| --------------------------------------------- | ------------------------ | -------------------------------------------------- |
+| `src_ip`, `src_port`, `dst_ip`, `dst_port`    | `Utf8` / `UInt16`        | Initiator and responder endpoints                  |
+| `first_timestamp`, `last_timestamp`           | `Timestamp(Microsecond)` | First and last packet seen                          |
+| `duration_ms`                                 | `Float64`                | Time between them                                  |
+| `packets_fwd`, `packets_rev`                  | `UInt64`                 | Packet counts per direction                        |
+| `bytes_fwd`, `bytes_rev`                      | `UInt64`                 | On-the-wire frame bytes per direction              |
+| `retransmissions_fwd`, `retransmissions_rev`  | `UInt64`                 | Segments below the highest seen sequence end       |
+| `handshake_rtt_ms`                            | `Float64`                | SYN → handshake-completing ACK; NULL if not captured |
+| `state`                                       | `Utf8`                   | `active`, `half_closed`, `closed` (both FINs), or `reset` |
+
 ## Scalar functions
 
 ### `reverse_dns(ip)`
@@ -139,6 +168,41 @@ SELECT geoip(src_ip)['error'] FROM pcap('capture.pcap') LIMIT 1;
 
 [GeoLite2-City]: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
 
+### `dns_query(payload)`
+
+Decodes a DNS message from a packet payload (typically UDP port 53 — DNS
+over UDP fits in a single datagram, so no reassembly is needed). Returns a
+struct with `is_response` (`Boolean`), `name` and `query_type` (`Utf8`, from
+the first question), `response_code` (`Utf8`, NULL for queries), and
+`answers` (`List<Utf8>`, NULL for queries). Answers include A/AAAA addresses
+and CNAME/NS/PTR names; other record types are skipped. Payloads that do not
+parse as DNS yield a NULL struct.
+
+```sql
+SELECT dns_query(payload)['name'] AS name, count(*) AS queries
+FROM pcap('capture.pcap')
+WHERE dst_port = 53
+GROUP BY name ORDER BY queries DESC;
+```
+
+### `tls_sni(payload)`
+
+Extracts the Server Name Indication (SNI) host name from a TLS ClientHello
+in a packet payload (typically TCP port 443), or NULL when the payload is
+not a ClientHello or carries no SNI. In HTTPS traffic the payloads are
+encrypted, but the ClientHello — the first packet the client sends — is not,
+so this reveals the destination host of otherwise opaque connections:
+
+```sql
+SELECT tls_sni(payload) AS host, count(*) AS hellos
+FROM pcap('capture.pcap')
+WHERE tls_sni(payload) IS NOT NULL
+GROUP BY host ORDER BY hellos DESC;
+```
+
+The ClientHello must fit in the payload (it usually does); this does not
+reassemble segments.
+
 ## Schema
 
 One row per captured frame. Layers that cannot be decoded (non-IP traffic,
@@ -164,6 +228,7 @@ truncated frames, unknown link types) yield null columns rather than errors.
 | `tcp_flags`      | `Utf8`                   | e.g. `SYN\|ACK`                          |
 | `tcp_seq`        | `UInt32`                 |                                          |
 | `tcp_ack`        | `UInt32`                 |                                          |
+| `tcp_window`     | `UInt16`                 | Receive window size (unscaled)           |
 | `payload_length` | `UInt32`                 | Transport payload bytes                  |
 | `payload`        | `Binary`                 | Only materialized when projected         |
 

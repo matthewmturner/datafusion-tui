@@ -153,6 +153,146 @@ async fn test_interfaces_lists_devices() {
     "#);
 }
 
+/// A minimal DNS query for `example.com` A record
+fn dns_query_bytes() -> Vec<u8> {
+    let mut m = vec![
+        0x12, 0x34, // id
+        0x01, 0x00, // flags: RD
+        0x00, 0x01, // qdcount
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // an/ns/ar
+    ];
+    m.extend_from_slice(b"\x07example\x03com\x00");
+    m.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]); // A, IN
+    m
+}
+
+/// A minimal TLS ClientHello with an SNI extension for `host`
+fn client_hello_bytes(host: &str) -> Vec<u8> {
+    let host = host.as_bytes();
+    let mut sni_ext = Vec::new();
+    let entry_len = 1 + 2 + host.len();
+    sni_ext.extend_from_slice(&(entry_len as u16).to_be_bytes());
+    sni_ext.push(0); // host_name
+    sni_ext.extend_from_slice(&(host.len() as u16).to_be_bytes());
+    sni_ext.extend_from_slice(host);
+
+    let mut extensions = Vec::new();
+    extensions.extend_from_slice(&0u16.to_be_bytes()); // server_name
+    extensions.extend_from_slice(&(sni_ext.len() as u16).to_be_bytes());
+    extensions.extend_from_slice(&sni_ext);
+
+    let mut body = Vec::new();
+    body.extend_from_slice(&[0x03, 0x03]);
+    body.extend_from_slice(&[0u8; 32]);
+    body.push(0);
+    body.extend_from_slice(&[0x00, 0x02, 0x13, 0x01]);
+    body.extend_from_slice(&[0x01, 0x00]);
+    body.extend_from_slice(&(extensions.len() as u16).to_be_bytes());
+    body.extend_from_slice(&extensions);
+
+    let mut handshake = vec![0x01]; // ClientHello
+    let body_len = body.len();
+    handshake.extend_from_slice(&[
+        (body_len >> 16) as u8,
+        (body_len >> 8) as u8,
+        body_len as u8,
+    ]);
+    handshake.extend_from_slice(&body);
+
+    let mut record = vec![0x16, 0x03, 0x01]; // handshake, TLS 1.0 record
+    record.extend_from_slice(&(handshake.len() as u16).to_be_bytes());
+    record.extend_from_slice(&handshake);
+    record
+}
+
+/// Writes a capture with a real DNS query (UDP:53) and a TLS ClientHello
+/// (TCP:443) so the payload UDFs have something to decode
+fn write_payload_pcap(path: &Path) {
+    let file = std::fs::File::create(path).unwrap();
+    let mut writer = PcapWriter::new(file, 1).unwrap();
+
+    let dns = dns_query_bytes();
+    let builder = PacketBuilder::ethernet2(SRC_MAC, DST_MAC)
+        .ipv4([10, 0, 0, 1], [8, 8, 8, 8], 64)
+        .udp(53001, 53);
+    let mut frame = Vec::with_capacity(builder.size(dns.len()));
+    builder.write(&mut frame, &dns).unwrap();
+    writer.write_packet(BASE_TS_MICROS, &frame).unwrap();
+
+    let hello = client_hello_bytes("example.com");
+    let builder = PacketBuilder::ethernet2(SRC_MAC, DST_MAC)
+        .ipv4([10, 0, 0, 1], [10, 0, 0, 2], 64)
+        .tcp(51000, 443, 1000, 1024)
+        .psh()
+        .ack(1);
+    let mut frame = Vec::with_capacity(builder.size(hello.len()));
+    builder.write(&mut frame, &hello).unwrap();
+    writer.write_packet(BASE_TS_MICROS + 500, &frame).unwrap();
+
+    writer.flush().unwrap();
+}
+
+#[tokio::test]
+async fn test_tcp_conversations() {
+    let dir = tempfile::tempdir().unwrap();
+    write_test_pcap(&dir.path().join("test.pcap"));
+    let execution = TestExecution::new().await;
+    // The fixture has a SYN and a SYN|ACK for one flow (initiator 10.0.0.1),
+    // plus an unrelated UDP packet that must not appear
+    let sql = format!(
+        "SELECT src_ip, src_port, dst_ip, dst_port, packets_fwd, packets_rev, state \
+         FROM tcp_conversations('{}/test.pcap')",
+        dir.path().display()
+    );
+    let output = execution.run_and_format(&sql).await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +----------+----------+----------+----------+-------------+-------------+--------+
+    - "| src_ip   | src_port | dst_ip   | dst_port | packets_fwd | packets_rev | state  |"
+    - +----------+----------+----------+----------+-------------+-------------+--------+
+    - "| 10.0.0.1 | 51000    | 10.0.0.2 | 443      | 1           | 1           | active |"
+    - +----------+----------+----------+----------+-------------+-------------+--------+
+    "#);
+}
+
+#[tokio::test]
+async fn test_dns_query_udf() {
+    let dir = tempfile::tempdir().unwrap();
+    write_payload_pcap(&dir.path().join("test.pcap"));
+    let execution = TestExecution::new().await;
+    let sql = format!(
+        "SELECT dns_query(payload)['name'] AS name, dns_query(payload)['query_type'] AS qtype \
+         FROM pcap('{}/test.pcap') WHERE dst_port = 53",
+        dir.path().display()
+    );
+    let output = execution.run_and_format(&sql).await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +-------------+-------+
+    - "| name        | qtype |"
+    - +-------------+-------+
+    - "| example.com | A     |"
+    - +-------------+-------+
+    "#);
+}
+
+#[tokio::test]
+async fn test_tls_sni_udf() {
+    let dir = tempfile::tempdir().unwrap();
+    write_payload_pcap(&dir.path().join("test.pcap"));
+    let execution = TestExecution::new().await;
+    let sql = format!(
+        "SELECT tls_sni(payload) AS host FROM pcap('{}/test.pcap') WHERE dst_port = 443",
+        dir.path().display()
+    );
+    let output = execution.run_and_format(&sql).await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +-------------+
+    - "| host        |"
+    - +-------------+
+    - "| example.com |"
+    - +-------------+
+    "#);
+}
+
 #[tokio::test]
 async fn test_pcap_wide_adds_enrichment_columns() {
     let dir = tempfile::tempdir().unwrap();

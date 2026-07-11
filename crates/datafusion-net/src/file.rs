@@ -216,48 +216,48 @@ struct NgInterface {
     ts_offset: i64,
 }
 
-/// Reads `path`, decoding each frame and sending record batches of
-/// `BATCH_SIZE` rows until the file ends, `limit` rows have been produced, or
-/// the consumer drops the stream
-fn read_pcap_file(
-    path: String,
-    projection: Option<Vec<usize>>,
-    limit: Option<usize>,
-    tx: Sender<Result<RecordBatch>>,
-) -> Result<()> {
-    let file = match File::open(&path) {
-        Ok(file) => file,
-        Err(e) => {
-            send_error(
-                &tx,
-                DataFusionError::External(format!("pcap failed to open '{path}': {e}").into()),
-            );
-            return Ok(());
-        }
-    };
-    let mut reader = match create_reader(READER_CAPACITY, file) {
-        Ok(reader) => reader,
-        Err(e) => {
-            send_error(
-                &tx,
-                DataFusionError::External(
-                    format!("pcap failed to read '{path}' as a pcap/pcapng file: {e}").into(),
-                ),
-            );
-            return Ok(());
-        }
-    };
+/// A raw captured frame handed to [`for_each_frame`] callbacks
+pub(crate) struct RawFrame<'a> {
+    pub link_type: u32,
+    pub ts_micros: i64,
+    pub origlen: u32,
+    pub caplen: u32,
+    pub data: &'a [u8],
+}
 
-    let mut builder = PacketBatchBuilder::new(payload_projected(&projection));
+/// Whether [`for_each_frame`] should keep reading
+pub(crate) enum FrameLoop {
+    Continue,
+    Stop,
+}
+
+/// Iterates the frames of the pcap/pcapng file at `path`, driving the format
+/// state machine (section/interface blocks, per-interface link types and
+/// timestamp resolutions) and calling `on_frame` with the 1-based frame
+/// number and each captured frame. `func` names the calling table function
+/// in error messages.
+pub(crate) fn for_each_frame(
+    func: &str,
+    path: &str,
+    mut on_frame: impl FnMut(u64, RawFrame<'_>) -> Result<FrameLoop>,
+) -> Result<()> {
+    let file = File::open(path).map_err(|e| {
+        DataFusionError::External(format!("{func} failed to open '{path}': {e}").into())
+    })?;
+    let mut reader = create_reader(READER_CAPACITY, file).map_err(|e| {
+        DataFusionError::External(
+            format!("{func} failed to read '{path}' as a pcap/pcapng file: {e}").into(),
+        )
+    })?;
+
     let mut frame_number = 0u64;
-    let mut produced = 0usize;
     // Legacy pcap state
     let mut legacy_link_type = link_type::ETHERNET;
     let mut legacy_ts_nanos = false;
     // pcapng state
     let mut ng_interfaces: Vec<NgInterface> = Vec::new();
 
-    'read: loop {
+    loop {
         match reader.next() {
             Ok((offset, block)) => {
                 let frame = match block {
@@ -322,42 +322,72 @@ fn read_pcap_file(
 
                 if let Some((link_type, ts_micros, origlen, caplen, data)) = frame {
                     frame_number += 1;
-                    let decoded = decode_frame(link_type, data);
-                    builder.append(ts_micros, frame_number, origlen, caplen, &decoded);
-                    produced += 1;
-                    if limit.is_some_and(|l| produced >= l) {
-                        break 'read;
-                    }
-                    if builder.len() >= BATCH_SIZE && !send_batch(&mut builder, &projection, &tx)? {
-                        // Consumer dropped the stream
+                    let raw = RawFrame {
+                        link_type,
+                        ts_micros,
+                        origlen,
+                        caplen,
+                        data,
+                    };
+                    if let FrameLoop::Stop = on_frame(frame_number, raw)? {
                         return Ok(());
                     }
                 }
                 reader.consume(offset);
             }
-            Err(PcapError::Eof) => break,
+            Err(PcapError::Eof) => return Ok(()),
             Err(PcapError::Incomplete(_)) => {
-                if let Err(e) = reader.refill() {
-                    send_error(
-                        &tx,
-                        DataFusionError::External(
-                            format!("pcap failed to read '{path}': {e}").into(),
-                        ),
-                    );
-                    return Ok(());
-                }
+                reader.refill().map_err(|e| {
+                    DataFusionError::External(format!("{func} failed to read '{path}': {e}").into())
+                })?;
             }
             Err(e) => {
-                send_error(
-                    &tx,
-                    DataFusionError::External(format!("pcap failed to read '{path}': {e}").into()),
-                );
-                return Ok(());
+                return Err(DataFusionError::External(
+                    format!("{func} failed to read '{path}': {e}").into(),
+                ))
             }
         }
     }
+}
 
-    send_batch(&mut builder, &projection, &tx)?;
+/// Reads `path`, decoding each frame and sending record batches of
+/// `BATCH_SIZE` rows until the file ends, `limit` rows have been produced, or
+/// the consumer drops the stream
+fn read_pcap_file(
+    path: String,
+    projection: Option<Vec<usize>>,
+    limit: Option<usize>,
+    tx: Sender<Result<RecordBatch>>,
+) -> Result<()> {
+    let mut builder = PacketBatchBuilder::new(payload_projected(&projection));
+    let mut produced = 0usize;
+    let result = for_each_frame("pcap", &path, |frame_number, frame| {
+        let decoded = decode_frame(frame.link_type, frame.data);
+        builder.append(
+            frame.ts_micros,
+            frame_number,
+            frame.origlen,
+            frame.caplen,
+            &decoded,
+        );
+        produced += 1;
+        if limit.is_some_and(|l| produced >= l) {
+            return Ok(FrameLoop::Stop);
+        }
+        if builder.len() >= BATCH_SIZE && !send_batch(&mut builder, &projection, &tx)? {
+            // Consumer dropped the stream
+            return Ok(FrameLoop::Stop);
+        }
+        Ok(FrameLoop::Continue)
+    });
+    match result {
+        Ok(()) => {
+            // Flush the final partial batch; if the consumer already dropped
+            // the stream the send is a no-op
+            send_batch(&mut builder, &projection, &tx)?;
+        }
+        Err(e) => send_error(&tx, e),
+    }
     Ok(())
 }
 
