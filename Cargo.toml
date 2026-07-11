@@ -68,10 +68,10 @@ tui-logger = { features = [
 ], optional = true, version = "0.18" }
 url = { features = ["serde"], version = "2.5.2" }
 uuid = { optional = true, version = "1.10.0" }
-vortex = { optional = true, version = "0.76" }
-vortex-datafusion = { optional = true, version = "0.76" }
-vortex-file = { optional = true, version = "0.76" }
-vortex-session = { optional = true, version = "0.76" }
+vortex = { optional = true, version = "0.78" }
+vortex-datafusion = { optional = true, version = "0.78" }
+vortex-file = { optional = true, version = "0.78" }
+vortex-session = { optional = true, version = "0.78" }
 
 [dev-dependencies]
 assert_cmd = "2.0.16"
