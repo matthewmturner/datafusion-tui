@@ -73,6 +73,33 @@ impl TableFunctionImpl for InterfacesFunc {
     }
 }
 
+/// Falls back to a static, human-readable description for well-known
+/// interface name patterns when `pcap` doesn't supply one itself (libpcap
+/// leaves `desc` empty for most interfaces on macOS).
+fn static_description(name: &str) -> Option<&'static str> {
+    let prefix = name.trim_end_matches(|c: char| c.is_ascii_digit());
+    match prefix {
+        "lo" => Some("Loopback interface"),
+        "en" => Some("Ethernet or Wi-Fi adapter"),
+        "utun" => Some("Utility tunnel interface (VPN, Back to My Mac, etc.)"),
+        "ap" => Some("Wi-Fi Access Point (Personal Hotspot / Instant Hotspot)"),
+        "awdl" => Some("Apple Wireless Direct Link (AirDrop, AirPlay)"),
+        "llw" => Some("Low-Latency WLAN interface (AWDL companion interface)"),
+        "anpi" => Some("Apple Network Platform Interface (Wi-Fi/Bluetooth coexistence)"),
+        "bridge" => Some("Virtual bridge interface"),
+        "gif" => Some("Generic tunnel interface (IPv6-in-IPv4)"),
+        "stf" => Some("6to4 tunnel interface"),
+        "vmnet" => Some("Virtual Machine network interface"),
+        "vnic" => Some("Parallels/VMware virtual network interface"),
+        "ppp" => Some("Point-to-Point Protocol interface"),
+        "wlan" => Some("Wireless LAN interface"),
+        "eth" => Some("Ethernet interface"),
+        "docker" => Some("Docker virtual bridge interface"),
+        "veth" => Some("Virtual Ethernet interface"),
+        _ => None,
+    }
+}
+
 /// Builds the single record batch of interfaces from `pcap`'s device list
 fn interfaces_batch(schema: &SchemaRef) -> Result<RecordBatch> {
     let devices = pcap::Device::list().map_err(|e| {
@@ -90,7 +117,7 @@ fn interfaces_batch(schema: &SchemaRef) -> Result<RecordBatch> {
 
     for device in devices {
         name.append_value(&device.name);
-        description.append_option(device.desc.as_deref());
+        description.append_option(device.desc.as_deref().or_else(|| static_description(&device.name)));
         for address in &device.addresses {
             addresses.values().append_value(address.addr.to_string());
         }
