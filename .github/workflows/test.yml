@@ -286,6 +286,39 @@ jobs:
       - name: Run WebSocket tests
         run: |
           cargo test --features=websocket extension_cases::websocket
+  test-net:
+    name: Extension / Net
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Cache Cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cargo
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - name: Cache Rust target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: target-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            target-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-
+            target-${{ runner.os }}-
+      - name: Setup Rust Toolchain
+        uses: ./.github/actions/setup-rust
+      - name: Install libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+      - name: Run Net tests
+        run: |
+          cargo test --manifest-path crates/datafusion-net/Cargo.toml --all-features
+          cargo test --features=net extension_cases::net
   test-clickhouse:
     name: Extension / ClickHouse
     runs-on: ubuntu-latest

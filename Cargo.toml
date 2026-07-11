@@ -75,9 +75,12 @@ vortex-session = { optional = true, version = "0.76" }
 
 [dev-dependencies]
 assert_cmd = "2.0.16"
+# Used (without the libpcap-backed `live` feature) to generate pcap fixtures
+datafusion-net = { path = "crates/datafusion-net", version = "0.1.0" }
 datafusion-udfs-wasm = { features = [
   "serde",
 ], path = "crates/datafusion-udfs-wasm", version = "0.1.0" }
+etherparse = "0.20"
 http-body-util = "0.1.3"
 insta = { features = ["yaml"], version = "1.40.0" }
 predicates = "3.1.2"
@@ -117,6 +120,7 @@ http = [
 ]
 huggingface = ["datafusion-app/huggingface"]
 mongodb = ["datafusion-app/mongodb"]
+net = ["datafusion-app/net"]
 s3 = ["datafusion-app/s3"]
 tui = ["dep:crossterm", "dep:ratatui", "dep:ratatui-textarea", "dep:tui-logger"]
 udfs-wasm = ["datafusion-app/udfs-wasm"]

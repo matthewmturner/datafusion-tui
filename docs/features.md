@@ -58,6 +58,28 @@ SELECT * FROM websocket('wss://stream.example.com/ws', '{"op":"subscribe","chann
 
 The source is unbounded: without a `LIMIT` (or an aggregation that can complete) the query streams until the server closes the connection.  Note the CLI `--concat` flag collects all batches and therefore should not be used with unbounded queries.
 
+### Net (`--features=net`)
+
+Adds table functions from [datafusion-net](https://github.com/datafusion-contrib/datafusion-dft/tree/main/crates/datafusion-net) for querying network packet captures with SQL, similar to wireshark / tshark.  Both functions share a wireshark-style schema (`timestamp`, `src_ip`, `dst_ip`, `protocol`, `src_port`, `dst_port`, `tcp_flags`, `payload`, etc.); frames that cannot be decoded produce rows with null columns rather than errors.
+
+`pcap` reads a pcap/pcapng capture file as a table:
+
+```sql
+SELECT src_ip, dst_ip, protocol, length FROM pcap('capture.pcap') WHERE dst_port = 443
+```
+
+`capture` streams live-captured packets from a network interface, with an optional BPF filter and an optional duration in seconds:
+
+```sql
+-- Stream until 100 packets have been captured
+SELECT * FROM capture('en0') LIMIT 100;
+
+-- Capture for 10 seconds; the stream terminates, so aggregations work
+SELECT src_ip, count(*) FROM capture('en0', 'tcp port 443', 10) GROUP BY src_ip;
+```
+
+Without a duration the live capture is unbounded: use a `LIMIT` or the query streams until cancelled.  Live capture requires elevated privileges (sudo, `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS) and links against libpcap (`libpcap-dev` on Debian/Ubuntu; included with macOS).
+
 ## External Features
 
 `dft` also has several external optional (conditionally compiled features) integrations which are controlled by [Rust Crate Features]

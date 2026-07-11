@@ -33,6 +33,8 @@ mod functions_json;
 mod huggingface;
 #[cfg(feature = "mongodb")]
 mod mongodb;
+#[cfg(feature = "net")]
+mod net;
 #[cfg(feature = "s3")]
 mod s3;
 #[cfg(feature = "udfs-wasm")]

@@ -126,6 +126,12 @@ impl ExecutionContext {
             Arc::new(crate::tables::websocket::WebSocketFunc::default()),
         );
 
+        #[cfg(feature = "net")]
+        {
+            session_ctx.register_udtf("pcap", Arc::new(datafusion_net::PcapFunc::default()));
+            session_ctx.register_udtf("capture", Arc::new(datafusion_net::CaptureFunc::default()));
+        }
+
         let catalog = create_app_catalog(config, app_name, app_version)?;
         session_ctx.register_catalog(&config.catalog.name, catalog);
 
