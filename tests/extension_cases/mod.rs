@@ -33,6 +33,8 @@ mod functions_json;
 mod huggingface;
 #[cfg(feature = "mongodb")]
 mod mongodb;
+#[cfg(feature = "net")]
+mod net;
 #[cfg(feature = "s3")]
 mod s3;
 #[cfg(feature = "udfs-wasm")]
@@ -59,8 +61,11 @@ pub struct TestExecution {
 #[allow(dead_code)]
 impl TestExecution {
     pub async fn new() -> Self {
-        let config = AppConfig::default();
+        Self::new_with_config(AppConfig::default()).await
+    }
 
+    /// Like [`Self::new`] but with a caller-provided config
+    pub async fn new_with_config(config: AppConfig) -> Self {
         let session_state = DftSessionStateBuilder::try_new(Some(config.cli.execution.clone()))
             .unwrap()
             .with_extensions()

@@ -77,7 +77,23 @@ pub fn merge_configs(shared: ExecutionConfig, priority: ExecutionConfig) -> Exec
         merged.mongodb = Some(mongodb)
     }
 
+    #[cfg(feature = "net")]
+    if let Some(geoip_db_path) = priority.net.geoip_db_path {
+        merged.net.geoip_db_path = Some(geoip_db_path)
+    }
+
     merged
+}
+
+/// Configuration for the `net` feature
+#[cfg(feature = "net")]
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct NetConfig {
+    /// Path to a MaxMind-format (`.mmdb`) database, such as GeoLite2-City,
+    /// used by the single-argument form of the `geoip` UDF. The `GEOIP_DB`
+    /// environment variable takes precedence over this value.
+    #[serde(default)]
+    pub geoip_db_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -105,6 +121,9 @@ pub struct ExecutionConfig {
     #[cfg(feature = "udfs-wasm")]
     #[serde(default = "default_wasm_udf")]
     pub wasm_udf: WasmUdfConfig,
+    #[cfg(feature = "net")]
+    #[serde(default)]
+    pub net: NetConfig,
     #[serde(default = "default_catalog")]
     pub catalog: CatalogConfig,
     #[cfg(feature = "observability")]
@@ -128,6 +147,8 @@ impl Default for ExecutionConfig {
             // iceberg: default_iceberg_config(),
             #[cfg(feature = "udfs-wasm")]
             wasm_udf: default_wasm_udf(),
+            #[cfg(feature = "net")]
+            net: NetConfig::default(),
             catalog: default_catalog(),
             #[cfg(feature = "observability")]
             observability: default_observability(),

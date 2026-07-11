@@ -61,6 +61,9 @@ cargo install datafusion-dft --features=functions-json,functions-parquet
 
 # With the websocket table function for streaming WebSocket messages
 cargo install datafusion-dft --features=websocket
+
+# With the pcap / capture table functions for querying network packet captures
+cargo install datafusion-dft --features=net
 ```
 
 See the [Features documentation](docs/features.md) for all available features.

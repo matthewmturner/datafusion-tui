@@ -58,6 +58,82 @@ SELECT * FROM websocket('wss://stream.example.com/ws', '{"op":"subscribe","chann
 
 The source is unbounded: without a `LIMIT` (or an aggregation that can complete) the query streams until the server closes the connection.  Note the CLI `--concat` flag collects all batches and therefore should not be used with unbounded queries.
 
+### Net (`--features=net`)
+
+Adds table functions from [datafusion-net](https://github.com/datafusion-contrib/datafusion-dft/tree/main/crates/datafusion-net) for querying network packet captures with SQL, similar to wireshark / tshark.  Both functions share a wireshark-style schema (`timestamp`, `src_ip`, `dst_ip`, `protocol`, `src_port`, `dst_port`, `tcp_flags`, `payload`, etc.); frames that cannot be decoded produce rows with null columns rather than errors.
+
+`pcap` reads a pcap/pcapng capture file as a table:
+
+```sql
+SELECT src_ip, dst_ip, protocol, length FROM pcap('capture.pcap') WHERE dst_port = 443
+```
+
+`capture` streams live-captured packets from a network interface, with an optional BPF filter and an optional duration in seconds:
+
+```sql
+-- Stream until 100 packets have been captured
+SELECT * FROM capture('en0') LIMIT 100;
+
+-- Capture for 10 seconds; the stream terminates, so aggregations work
+SELECT src_ip, count(*) FROM capture('en0', 'tcp port 443', 10) GROUP BY src_ip;
+```
+
+Without a duration the live capture is unbounded: use a `LIMIT` or the query streams until cancelled.  Live capture requires elevated privileges (sudo, `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS) and links against libpcap (`libpcap-dev` on Debian/Ubuntu; included with macOS).
+
+`pcap_wide` and `capture_wide` take the same arguments as their narrow counterparts and append DNS and geolocation enrichment columns for the source and destination addresses: `src_host` / `dst_host` (reverse DNS) and `src_country`, `src_city`, `src_lat`, `src_lon` plus the `dst_` equivalents (resolved against the configured `geoip` database; without one the geolocation columns are `NULL`):
+
+```sql
+SELECT dst_ip, dst_host, dst_country, count(*) AS packets
+FROM pcap_wide('capture.pcap') GROUP BY dst_ip, dst_host, dst_country ORDER BY packets DESC
+```
+
+`interfaces` lists the system's network capture interfaces (similar to `tshark -D`) with their addresses and status flags, which is useful for discovering what to pass to `capture`.  Listing does not require elevated privileges:
+
+```sql
+SELECT name, description, addresses FROM interfaces() WHERE is_up AND NOT is_loopback
+```
+
+`tcp_conversations` aggregates a capture file into one row per TCP connection (like wireshark's "Statistics → Conversations" or `tshark -z conv,tcp`), with per-direction packet/byte/retransmission counts, the handshake RTT, duration, and connection state (`active`, `half_closed`, `closed`, or `reset`).  Direction is from the connection initiator's perspective (`fwd` is initiator → responder):
+
+```sql
+SELECT dst_ip, dst_port, handshake_rtt_ms, retransmissions_fwd, state
+FROM tcp_conversations('capture.pcap') ORDER BY retransmissions_fwd DESC
+```
+
+The feature also adds a `reverse_dns` scalar function that resolves an IP address string to a hostname via reverse DNS (PTR) lookup, which pairs naturally with the `src_ip` / `dst_ip` columns:
+
+```sql
+SELECT dst_ip, reverse_dns(dst_ip) AS host, count(*) AS packets
+FROM capture('en0', 'tcp', 10) GROUP BY dst_ip, host ORDER BY packets DESC
+```
+
+Lookups are cached and bounded by a timeout; addresses that fail to parse, fail to resolve, or time out yield `NULL`.
+
+There is also a `geoip` scalar function that geolocates an IP address using a MaxMind-format (`.mmdb`) database, returning a struct with `country_code`, `country`, `city`, `latitude`, `longitude`, `time_zone`, and `error` fields:
+
+```sql
+SELECT geoip(src_ip, '/path/GeoLite2-City.mmdb')['country_code'] AS country, count(*) AS packets
+FROM pcap('capture.pcap') GROUP BY country ORDER BY packets DESC
+```
+
+A single database file serves every field — there is no per-field database.  A City-schema database ([GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data), free with a MaxMind account, or the commercial GeoIP2-City) populates all fields; a Country-schema database (GeoLite2-Country) populates only `country_code` and `country`, leaving the rest `NULL`; other schemas (ASN, ISP, ...) yield all-`NULL` fields.
+
+The database path can also come from the `GEOIP_DB` environment variable or the `geoip_db_path` entry in the `[execution.net]` config section (the environment variable takes precedence), in which case the second argument can be omitted.
+
+```toml
+[execution.net]
+geoip_db_path = "/path/to/GeoLite2-City.mmdb"
+```
+
+Addresses that fail to parse or have no entry in the database yield `NULL`.  A database that is missing, unreadable, or unconfigured does not fail the query: the location fields are `NULL` and the `error` field (`NULL` on success) carries the reason, e.g. `SELECT geoip(src_ip)['error']`.  The same applies to the geolocation columns of `pcap_wide` / `capture_wide`, which are `NULL` when the database is unavailable.
+
+Two payload-decoding scalar functions parse application-layer details out of the `payload` column.  `dns_query(payload)` decodes a DNS message (typically UDP port 53) into a struct with `is_response`, `name`, `query_type`, `response_code`, and `answers` (a list of A/AAAA addresses and CNAME/NS/PTR names).  `tls_sni(payload)` extracts the SNI host name from a TLS ClientHello (typically TCP port 443) — the ClientHello is unencrypted even for HTTPS, so this reveals the destination host of otherwise opaque connections.  Both return `NULL` for payloads that do not parse:
+
+```sql
+SELECT tls_sni(payload) AS host, count(*) AS hellos
+FROM pcap('capture.pcap') WHERE tls_sni(payload) IS NOT NULL GROUP BY host ORDER BY hellos DESC
+```
+
 ## External Features
 
 `dft` also has several external optional (conditionally compiled features) integrations which are controlled by [Rust Crate Features]

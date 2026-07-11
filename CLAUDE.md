@@ -110,11 +110,13 @@ cargo test --features="deltalake s3" extension_cases::deltalake::test_deltalake_
 cargo test --features=udfs-wasm extension_cases::udfs_wasm
 cargo test --features=vortex extension_cases::vortex
 cargo test --features=vortex cli_cases::basic::test_output_vortex
+cargo test --features=net extension_cases::net  # Requires libpcap (libpcap-dev on Debian/Ubuntu)
 
 # Run tests for specific crates
 cargo test --manifest-path crates/datafusion-app/Cargo.toml --all-features
 cargo test --manifest-path crates/datafusion-functions-parquet/Cargo.toml
 cargo test --manifest-path crates/datafusion-udfs-wasm/Cargo.toml
+cargo test --manifest-path crates/datafusion-net/Cargo.toml --all-features
 
 # Run a single test
 cargo test <test_name>
@@ -168,6 +170,8 @@ The project is organized as a workspace with multiple crates:
 
 - **`crates/datafusion-udfs-wasm`**: WASM-based UDF support
 
+- **`crates/datafusion-net`**: Network packet capture querying — `pcap` (capture files), `capture` (live capture), `interfaces` (list capture devices), and `tcp_conversations` (per-connection TCP flow analytics) table functions (`capture`/`interfaces` behind its `live` feature); the `reverse_dns` (IP → hostname via PTR lookup) and `geoip` (IP → location via MaxMind `.mmdb` database) scalar UDFs; the `dns_query` and `tls_sni` payload-decoding scalar UDFs; and `pcap_wide` / `capture_wide` variants that append DNS and geolocation enrichment columns
+
 - **`crates/datafusion-auth`**: Authentication implementations
 
 - **`crates/datafusion-ffi-table-providers`**: FFI table provider support
@@ -212,6 +216,7 @@ The project uses extensive feature flags to keep binary size manageable:
 - `flightsql` - FlightSQL server and client
 - `http` - HTTP server
 - `huggingface` - HuggingFace dataset integration
+- `net` - Query network packet captures (pcap files and live capture) via SQL
 - `udfs-wasm` - WASM UDF support
 - `observability` - Metrics and tracing (required by servers)
 

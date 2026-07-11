@@ -126,6 +126,43 @@ impl ExecutionContext {
             Arc::new(crate::tables::websocket::WebSocketFunc::default()),
         );
 
+        #[cfg(feature = "net")]
+        {
+            use datafusion::logical_expr::ScalarUDF;
+
+            session_ctx.register_udtf("pcap", Arc::new(datafusion_net::PcapFunc::default()));
+            session_ctx.register_udtf("capture", Arc::new(datafusion_net::CaptureFunc::default()));
+            session_ctx.register_udtf(
+                "interfaces",
+                Arc::new(datafusion_net::InterfacesFunc::default()),
+            );
+            session_ctx.register_udtf(
+                "tcp_conversations",
+                Arc::new(datafusion_net::TcpConversationsFunc::default()),
+            );
+            session_ctx.register_udf(ScalarUDF::from(datafusion_net::ReverseDnsUdf::default()));
+            session_ctx.register_udf(ScalarUDF::from(datafusion_net::DnsQueryUdf::default()));
+            session_ctx.register_udf(ScalarUDF::from(datafusion_net::TlsSniUdf::default()));
+            // The GEOIP_DB environment variable takes precedence over the
+            // configured database path
+            let geoip_db_path = std::env::var_os(datafusion_net::GEOIP_DB_ENV_VAR)
+                .map(std::path::PathBuf::from)
+                .or_else(|| config.net.geoip_db_path.clone());
+            let geoip = match &geoip_db_path {
+                Some(path) => datafusion_net::GeoIpUdf::with_db_path(path),
+                None => datafusion_net::GeoIpUdf::default(),
+            };
+            session_ctx.register_udf(ScalarUDF::from(geoip));
+            session_ctx.register_udtf(
+                "pcap_wide",
+                Arc::new(datafusion_net::PcapWideFunc::new(geoip_db_path.clone())),
+            );
+            session_ctx.register_udtf(
+                "capture_wide",
+                Arc::new(datafusion_net::CaptureWideFunc::new(geoip_db_path)),
+            );
+        }
+
         let catalog = create_app_catalog(config, app_name, app_version)?;
         session_ctx.register_catalog(&config.catalog.name, catalog);
 

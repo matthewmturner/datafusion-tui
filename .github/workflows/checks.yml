@@ -65,7 +65,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends clang libclang-dev
+          apt-get install -y --no-install-recommends clang libclang-dev libpcap-dev
       - name: Cache Cargo registry and git
         uses: actions/cache@v4
         with:
