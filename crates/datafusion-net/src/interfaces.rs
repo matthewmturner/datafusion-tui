@@ -117,7 +117,12 @@ fn interfaces_batch(schema: &SchemaRef) -> Result<RecordBatch> {
 
     for device in devices {
         name.append_value(&device.name);
-        description.append_option(device.desc.as_deref().or_else(|| static_description(&device.name)));
+        description.append_option(
+            device
+                .desc
+                .as_deref()
+                .or_else(|| static_description(&device.name)),
+        );
         for address in &device.addresses {
             addresses.values().append_value(address.addr.to_string());
         }
