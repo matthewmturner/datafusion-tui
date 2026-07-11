@@ -80,6 +80,15 @@ SELECT src_ip, count(*) FROM capture('en0', 'tcp port 443', 10) GROUP BY src_ip;
 
 Without a duration the live capture is unbounded: use a `LIMIT` or the query streams until cancelled.  Live capture requires elevated privileges (sudo, `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS) and links against libpcap (`libpcap-dev` on Debian/Ubuntu; included with macOS).
 
+The feature also adds a `reverse_dns` scalar function that resolves an IP address string to a hostname via reverse DNS (PTR) lookup, which pairs naturally with the `src_ip` / `dst_ip` columns:
+
+```sql
+SELECT dst_ip, reverse_dns(dst_ip) AS host, count(*) AS packets
+FROM capture('en0', 'tcp', 10) GROUP BY dst_ip, host ORDER BY packets DESC
+```
+
+Lookups are cached and bounded by a timeout; addresses that fail to parse, fail to resolve, or time out yield `NULL`.
+
 ## External Features
 
 `dft` also has several external optional (conditionally compiled features) integrations which are controlled by [Rust Crate Features]

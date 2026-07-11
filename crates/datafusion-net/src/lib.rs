@@ -52,12 +52,14 @@ mod file;
 #[cfg(feature = "live")]
 mod live;
 mod schema;
+mod udfs;
 pub mod writer;
 
 pub use file::{PcapFunc, PcapTable};
 #[cfg(feature = "live")]
 pub use live::{CaptureFunc, CaptureTable};
 pub use schema::packet_schema;
+pub use udfs::ReverseDnsUdf;
 
 /// Extracts a string argument from a table function expression
 pub(crate) fn expr_to_string(expr: &Expr, func: &str, what: &str) -> Result<String> {

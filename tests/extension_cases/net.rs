@@ -135,3 +135,57 @@ async fn test_capture_explain_does_not_open_device() {
         .await;
     assert!(result.is_ok());
 }
+
+#[tokio::test]
+async fn test_reverse_dns_loopback() {
+    let execution = TestExecution::new().await;
+    // The loopback address must resolve to some hostname on any host with a
+    // working resolver; the exact PTR record is environment dependent so we
+    // only assert it is non-null
+    let output = execution
+        .run_and_format("SELECT reverse_dns('127.0.0.1') IS NOT NULL AS resolved")
+        .await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +----------+
+    - "| resolved |"
+    - +----------+
+    - "| true     |"
+    - +----------+
+    "#);
+}
+
+#[tokio::test]
+async fn test_reverse_dns_invalid_input_is_null() {
+    let execution = TestExecution::new().await;
+    // Unparseable input and a reserved address with no PTR record both yield
+    // null rather than erroring the query
+    let output = execution
+        .run_and_format(
+            "SELECT reverse_dns(ip) AS host FROM (VALUES ('not-an-ip'), ('192.0.2.1')) AS t(ip)",
+        )
+        .await;
+    insta::assert_yaml_snapshot!(output, @r#"
+    - +------+
+    - "| host |"
+    - +------+
+    - "|      |"
+    - "|      |"
+    - +------+
+    "#);
+}
+
+#[tokio::test]
+async fn test_reverse_dns_over_pcap() {
+    let dir = tempfile::tempdir().unwrap();
+    write_test_pcap(&dir.path().join("test.pcap"));
+    let execution = TestExecution::new().await;
+    // reverse_dns composes with the pcap table function over the src_ip
+    // column. The 10.0.0.0/8 addresses in the fixture will not resolve, but
+    // the query must plan and execute successfully.
+    let sql = format!(
+        "SELECT DISTINCT src_ip, reverse_dns(src_ip) AS host FROM pcap('{}/test.pcap')",
+        dir.path().display()
+    );
+    let result = execution.run(&sql).await;
+    assert!(result.is_ok());
+}

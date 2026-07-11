@@ -35,6 +35,26 @@ Without a duration the source is unbounded: use a `LIMIT` or the query
 streams until cancelled. Live capture requires elevated privileges (sudo,
 `cap_net_raw`+`cap_net_admin` on Linux, or ChmodBPF on macOS).
 
+## Scalar functions
+
+### `reverse_dns(ip)`
+
+Resolves an IP address string to a hostname via a reverse DNS (PTR) lookup,
+using the system resolver. Pairs naturally with the `src_ip` / `dst_ip`
+columns:
+
+```sql
+SELECT dst_ip, reverse_dns(dst_ip) AS host, count(*) AS packets
+FROM capture('en0', 'tcp', 10)
+GROUP BY dst_ip, host
+ORDER BY packets DESC;
+```
+
+Lookups are network I/O, so results are cached process-wide, identical
+addresses within a batch are resolved once, and each batch of lookups is
+bounded by a timeout. Addresses that fail to parse, fail to resolve, or time
+out yield `NULL`.
+
 ## Schema
 
 One row per captured frame. Layers that cannot be decoded (non-IP traffic,

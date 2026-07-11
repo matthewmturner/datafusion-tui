@@ -128,8 +128,11 @@ impl ExecutionContext {
 
         #[cfg(feature = "net")]
         {
+            use datafusion::logical_expr::ScalarUDF;
+
             session_ctx.register_udtf("pcap", Arc::new(datafusion_net::PcapFunc::default()));
             session_ctx.register_udtf("capture", Arc::new(datafusion_net::CaptureFunc::default()));
+            session_ctx.register_udf(ScalarUDF::from(datafusion_net::ReverseDnsUdf::default()));
         }
 
         let catalog = create_app_catalog(config, app_name, app_version)?;
