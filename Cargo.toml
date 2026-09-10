@@ -11,18 +11,6 @@ readme = "README.md"
 repository = "https://github.com/datafusion-contrib/datafusion-dft"
 version = "0.2.2"
 
-[workspace]
-members = [
-  "crates/datafusion-app",
-  "crates/datafusion-auth",
-  "crates/datafusion-functions-arrow",
-  "crates/datafusion-functions-parquet",
-  "crates/datafusion-functions-rocksdb",
-  "crates/datafusion-net",
-  "crates/datafusion-udfs-wasm",
-]
-resolver = "2"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -159,9 +147,6 @@ path = "src/main.rs"
 
 [lints.clippy]
 clone_on_ref_ptr = "deny"
-
-[profile.bench]
-debug = true
 
 # tpchgen has no arrow 58 compatible release (2.0.2 is arrow 57, 3.0.0 is arrow 59), so we
 # use a fork of v2.0.2 with arrow bumped to 58.

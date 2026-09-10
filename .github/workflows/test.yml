@@ -353,8 +353,8 @@ jobs:
         uses: ./.github/actions/setup-rust
       - name: Run RocksDB tests
         run: |
-          cargo test --locked --manifest-path crates/datafusion-functions-rocksdb/Cargo.toml
-          cargo test --locked --features=functions-rocksdb extension_cases::rocksdb
+          cargo test --manifest-path crates/datafusion-functions-rocksdb/Cargo.toml
+          cargo test --features=functions-rocksdb extension_cases::rocksdb
   test-net:
     name: Extension / Net
     runs-on: ubuntu-latest
@@ -632,7 +632,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
       - name: Run UDFs WASM tests
         run: |
-          cargo test --locked --all-features --manifest-path crates/datafusion-app/Cargo.toml
+          cargo test --all-features --manifest-path crates/datafusion-app/Cargo.toml
   test-crate-udfs-wasm:
     name: Crate / UDFs-WASM
     runs-on: ubuntu-latest
