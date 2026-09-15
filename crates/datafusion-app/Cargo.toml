@@ -72,8 +72,8 @@ criterion = { features = ["async_tokio"], version = "0.5.1" }
 
 [features]
 clickhouse = [
-  "dep:datafusion-federation",
   "datafusion-table-providers/clickhouse",
+  "dep:datafusion-federation",
   "dep:datafusion-table-providers",
 ]
 default = ["functions-parquet"]
@@ -85,8 +85,8 @@ functions-parquet = ["dep:datafusion-functions-parquet"]
 functions-rocksdb = ["dep:datafusion-functions-rocksdb"]
 huggingface = ["object_store_opendal", "opendal", "url"]
 mongodb = [
-  "dep:datafusion-federation",
   "datafusion-table-providers/mongodb",
+  "dep:datafusion-federation",
   "dep:datafusion-table-providers",
 ]
 net = ["datafusion-net/live", "dep:datafusion-net"]
