@@ -31,6 +31,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 fn main() -> Result<()> {
     let cli = DftArgs::parse();
 
+    if let Some(format) = cli.print_format_options {
+        cli::print_format_options(format);
+        return Ok(());
+    }
+
     // With Runtimes configured correctly the main Tokio runtime should only be used for network
     // IO, in which a single thread should be sufficient.
     //

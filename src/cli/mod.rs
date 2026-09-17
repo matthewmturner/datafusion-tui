@@ -20,13 +20,21 @@ mod progress;
 
 use crate::config::AppConfig;
 use crate::db::register_db;
-use crate::{args::DftArgs, execution::AppExecution};
+use crate::{
+    args::{DftArgs, Format},
+    execution::AppExecution,
+};
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use datafusion::arrow::array::{RecordBatch, RecordBatchWriter};
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::arrow::{csv, json};
+use datafusion::common::{
+    config::{ConfigFileType, TableOptions},
+    file_options::{csv_writer::CsvWriterOptions, parquet_writer::ParquetWriterOptions},
+    parsers::CompressionTypeVariant,
+};
 use datafusion::sql::parser::DFParser;
 use datafusion_app::config::merge_configs;
 use datafusion_app::extensions::DftSessionStateBuilder;
@@ -863,7 +871,7 @@ impl CliApp {
         // We get the schema from the first batch and use that for creating the writer
         if let Some(Ok(first_batch)) = stream.next().await {
             let schema = first_batch.schema();
-            let mut writer = path_to_writer(path, schema)?;
+            let mut writer = path_to_writer(path, schema, &self.args.format_options)?;
             writer.write(&first_batch)?;
 
             while let Some(maybe_batch) = stream.next().await {
@@ -972,24 +980,53 @@ impl AnyWriter {
     }
 }
 
-fn path_to_writer(path: &Path, schema: SchemaRef) -> Result<AnyWriter> {
+fn path_to_writer(
+    path: &Path,
+    schema: SchemaRef,
+    format_options: &[(String, String)],
+) -> Result<AnyWriter> {
     if let Some(extension) = path.extension() {
         if let Some(e) = extension.to_ascii_lowercase().to_str() {
-            let file = std::fs::File::create(path)?;
             return match e {
-                "csv" => Ok(AnyWriter::Csv(csv::writer::Writer::new(file))),
-                "json" => Ok(AnyWriter::Json(json::writer::LineDelimitedWriter::new(
-                    file,
-                ))),
+                "csv" => {
+                    let options = table_options(ConfigFileType::CSV, format_options)?;
+                    let writer_options = CsvWriterOptions::try_from(&options.csv)?;
+                    ensure_uncompressed(&writer_options.compression, "CSV")?;
+                    let file = std::fs::File::create(path)?;
+                    Ok(AnyWriter::Csv(writer_options.writer_options.build(file)))
+                }
+                "json" => {
+                    let options = table_options(ConfigFileType::JSON, format_options)?;
+                    ensure_uncompressed(&options.json.compression, "JSON")?;
+                    let file = std::fs::File::create(path)?;
+                    Ok(AnyWriter::Json(json::writer::LineDelimitedWriter::new(
+                        file,
+                    )))
+                }
                 "parquet" => {
-                    let props = WriterProperties::default();
+                    let props = if format_options.is_empty() {
+                        WriterProperties::default()
+                    } else {
+                        let mut options = table_options(ConfigFileType::PARQUET, format_options)?;
+                        if !options.parquet.global.skip_arrow_metadata {
+                            options.parquet.arrow_schema(&schema);
+                        }
+                        ParquetWriterOptions::try_from(&options.parquet)?.writer_options
+                    };
+                    let file = std::fs::File::create(path)?;
                     let writer = ArrowWriter::try_new(file, schema, Some(props))?;
                     Ok(AnyWriter::Parquet(writer))
                 }
                 #[cfg(feature = "vortex")]
-                "vortex" => Ok(AnyWriter::Vortex(VortexFileWriter::new(
-                    file, schema, path,
-                )?)),
+                "vortex" => {
+                    if !format_options.is_empty() {
+                        return Err(eyre!("Vortex output does not support format options"));
+                    }
+                    let file = std::fs::File::create(path)?;
+                    Ok(AnyWriter::Vortex(VortexFileWriter::new(
+                        file, schema, path,
+                    )?))
+                }
                 _ => {
                     #[cfg(feature = "vortex")]
                     return Err(eyre!(
@@ -1004,6 +1041,132 @@ fn path_to_writer(path: &Path, schema: SchemaRef) -> Result<AnyWriter> {
         }
     }
     Err(eyre!("Unable to parse extension"))
+}
+
+fn table_options(
+    format: ConfigFileType,
+    format_options: &[(String, String)],
+) -> Result<TableOptions> {
+    let mut options = TableOptions::new();
+    options.set_config_format(format);
+    for (key, value) in format_options {
+        let key = if key.starts_with("format.") {
+            key.clone()
+        } else {
+            format!("format.{key}")
+        };
+        options
+            .set(&key, value)
+            .map_err(|e| eyre!("Invalid output format option '{key}={value}': {e}"))?;
+    }
+    Ok(options)
+}
+
+fn ensure_uncompressed(compression: &CompressionTypeVariant, format: &str) -> Result<()> {
+    if compression != &CompressionTypeVariant::UNCOMPRESSED {
+        return Err(eyre!(
+            "{format} compression is not supported by --output; choose 'uncompressed'"
+        ));
+    }
+    Ok(())
+}
+
+pub fn print_format_options(format: Format) {
+    let config_format = match format {
+        Format::Csv => ConfigFileType::CSV,
+        Format::Json => ConfigFileType::JSON,
+        Format::Parquet => ConfigFileType::PARQUET,
+        #[cfg(feature = "vortex")]
+        Format::Vortex => {
+            println!("Vortex output does not currently expose configurable format options.");
+            return;
+        }
+    };
+
+    let mut options = TableOptions::new();
+    options.set_config_format(config_format);
+    let mut entries = options.entries();
+    entries.retain(|entry| {
+        let key = entry.key.strip_prefix("format.").unwrap_or(&entry.key);
+        is_output_format_option(format, key)
+    });
+    entries.sort_by(|left, right| left.key.cmp(&right.key));
+
+    println!("Available {format} output format options:\n");
+    if entries.is_empty() {
+        println!("No configurable options are currently supported by this output writer.");
+    } else {
+        println!("{:<44} {:<18} DESCRIPTION", "OPTION", "DEFAULT");
+        for entry in entries {
+            let key = entry.key.strip_prefix("format.").unwrap_or(&entry.key);
+            let default = entry.value.as_deref().unwrap_or("<none>");
+            let description = entry
+                .description
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            println!("{key:<44} {default:<18} {description}");
+        }
+    }
+
+    println!("\nPass an option with: --format-option KEY=VALUE");
+    if matches!(format, Format::Parquet) {
+        println!(
+            "Column-specific keys: compression, encoding, dictionary_enabled, statistics_enabled, bloom_filter_enabled, bloom_filter_fpp, bloom_filter_ndv."
+        );
+        println!("Use KEY::COLUMN=VALUE (for example, encoding::id=delta_binary_packed).");
+        println!("File metadata can be set with metadata::KEY=VALUE.");
+    }
+    if matches!(format, Format::Csv | Format::Json) {
+        println!("Note: compressed CSV/JSON output is not currently supported by --output.");
+    }
+}
+
+fn is_output_format_option(format: Format, key: &str) -> bool {
+    match format {
+        Format::Csv => matches!(
+            key,
+            "has_header"
+                | "delimiter"
+                | "quote"
+                | "escape"
+                | "double_quote"
+                | "quote_style"
+                | "ignore_leading_whitespace"
+                | "ignore_trailing_whitespace"
+                | "date_format"
+                | "datetime_format"
+                | "timestamp_format"
+                | "timestamp_tz_format"
+                | "time_format"
+                | "null_value"
+        ),
+        Format::Json => false,
+        Format::Parquet => {
+            matches!(
+                key,
+                "data_pagesize_limit"
+                    | "write_batch_size"
+                    | "writer_version"
+                    | "skip_arrow_metadata"
+                    | "compression"
+                    | "dictionary_enabled"
+                    | "dictionary_page_size_limit"
+                    | "statistics_enabled"
+                    | "max_row_group_size"
+                    | "created_by"
+                    | "column_index_truncate_length"
+                    | "statistics_truncate_length"
+                    | "data_page_row_count_limit"
+                    | "encoding"
+                    | "bloom_filter_on_write"
+                    | "bloom_filter_fpp"
+                    | "bloom_filter_ndv"
+            ) || key.starts_with("content_defined_chunking.")
+        }
+        #[cfg(feature = "vortex")]
+        Format::Vortex => false,
+    }
 }
 
 pub async fn try_run(cli: DftArgs, config: AppConfig) -> Result<()> {

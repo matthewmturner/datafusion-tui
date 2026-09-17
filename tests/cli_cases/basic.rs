@@ -18,6 +18,10 @@
 //! Tests for the CLI (e.g. run from files)
 
 use assert_cmd::Command;
+use parquet::{
+    basic::Encoding,
+    file::{reader::FileReader, serialized_reader::SerializedFileReader},
+};
 use std::{io::Read, path::PathBuf};
 
 use super::{assert_output_contains, contains_str, sql_in_file};
@@ -31,6 +35,46 @@ fn test_help() {
         .success();
 
     assert.stdout(contains_str("dft"));
+}
+
+#[test]
+fn test_print_parquet_format_options() {
+    Command::cargo_bin("dft")
+        .unwrap()
+        .args(["--print-format-options", "parquet"])
+        .assert()
+        .success()
+        .stdout(contains_str("Available parquet output format options:"))
+        .stdout(contains_str("encoding"))
+        .stdout(contains_str("compression"))
+        .stdout(contains_str("encoding::id=delta_binary_packed"));
+}
+
+#[test]
+fn test_print_csv_format_options() {
+    Command::cargo_bin("dft")
+        .unwrap()
+        .args(["--print-format-options", "csv"])
+        .assert()
+        .success()
+        .stdout(contains_str("Available csv output format options:"))
+        .stdout(contains_str("delimiter"))
+        .stdout(contains_str("has_header"));
+}
+
+#[test]
+fn test_print_json_format_options() {
+    Command::cargo_bin("dft")
+        .unwrap()
+        .args(["--print-format-options", "json"])
+        .assert()
+        .success()
+        .stdout(contains_str(
+            "No configurable options are currently supported",
+        ))
+        .stdout(contains_str(
+            "compressed CSV/JSON output is not currently supported",
+        ));
 }
 
 #[test]
@@ -490,6 +534,79 @@ fn test_output_parquet() {
 +----------+"#;
 
     assert.stdout(contains_str(expected));
+}
+
+#[test]
+fn test_output_parquet_column_encodings() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("encodings.parquet");
+
+    Command::cargo_bin("dft")
+        .unwrap()
+        .arg("-c")
+        .arg("SELECT 1 AS id, 'hello' AS name")
+        .arg("-o")
+        .arg(&path)
+        .arg("--format-option")
+        .arg("dictionary_enabled=false")
+        .arg("--format-option")
+        .arg("encoding::id=delta_binary_packed")
+        .arg("--format-option")
+        .arg("encoding::name=delta_length_byte_array")
+        .assert()
+        .success();
+
+    let reader = SerializedFileReader::new(std::fs::File::open(path).unwrap()).unwrap();
+    let row_group = reader.metadata().row_group(0);
+    assert!(row_group
+        .column(0)
+        .encodings()
+        .any(|encoding| encoding == Encoding::DELTA_BINARY_PACKED));
+    assert!(row_group
+        .column(1)
+        .encodings()
+        .any(|encoding| encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY));
+}
+
+#[test]
+fn test_output_csv_format_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("custom.csv");
+
+    Command::cargo_bin("dft")
+        .unwrap()
+        .arg("-c")
+        .arg("SELECT 1 AS id, 'hello' AS name")
+        .arg("-o")
+        .arg(&path)
+        .arg("--format-option")
+        .arg("delimiter=|")
+        .arg("--format-option")
+        .arg("has_header=false")
+        .assert()
+        .success();
+
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "1|hello\n");
+}
+
+#[test]
+fn test_invalid_output_format_option() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.parquet");
+
+    Command::cargo_bin("dft")
+        .unwrap()
+        .arg("-c")
+        .arg("SELECT 1")
+        .arg("-o")
+        .arg(&path)
+        .arg("--format-option")
+        .arg("encoding=not_an_encoding")
+        .assert()
+        .failure()
+        .stderr(contains_str("Unknown or unsupported parquet encoding"));
+
+    assert!(!path.exists());
 }
 
 #[test]
