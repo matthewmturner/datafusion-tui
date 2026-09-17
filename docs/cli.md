@@ -12,6 +12,42 @@ dft -f query.sql
 dft -c "SELECT 1+2"
 ```
 
+## Saving Results and Format Options
+
+Use `--output` (or `-o`) to save the result of one command or SQL file. The
+output format is inferred from the `.csv`, `.json`, `.parquet`, or (when
+enabled) `.vortex` suffix.
+
+Repeat `--format-option KEY=VALUE` to configure the selected writer. Option
+names follow DataFusion's file format options; the optional `format.` prefix is
+accepted. For example, Parquet options can be global or column-specific:
+
+```sh
+dft -c "SELECT id, name FROM users" -o users.parquet \
+  --format-option compression=zstd\(5\) \
+  --format-option encoding::id=delta_binary_packed \
+  --format-option encoding::name=delta_length_byte_array
+```
+
+CSV writer options use the same mechanism:
+
+```sh
+dft -c "SELECT id, name FROM users" -o users.csv \
+  --format-option delimiter='|' \
+  --format-option has_header=false
+```
+
+Invalid options fail with a configuration error. Compressed CSV/JSON output
+and Vortex-specific writer options are not currently supported.
+
+To list the available keys, defaults, and descriptions for a format:
+
+```sh
+dft --print-format-options parquet
+dft --print-format-options csv
+dft --print-format-options json
+```
+
 ## FlightSQL Mode
 
 Use `--flightsql` or `-q` to run commands or files against a FlightSQL server (instead of the default local SessionContext). You can override the default host for that single command with --host
